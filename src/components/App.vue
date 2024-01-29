@@ -29,8 +29,9 @@
             <div class="col col-9 right-pane">
                 <div v-if="contact" class="d-flex flex-column h-100">
                     <div class="messages mb-3">
-                        <div v-for="(item, index) in items[contact]" class="message shadow" :class="{ 'me': item.me }">
-                            <span>{{ item.message }}</span>
+                        <div v-for="(item, index) in conns[contact].items" class="message shadow"
+                            :class="{ 'me': item.me }">
+                            <span>{{ item.data }}</span>
                             <span class="time">{{ item.dt }}</span>
                         </div>
                     </div>
@@ -55,8 +56,6 @@ const textarea = ref(null);
 
 // PeerJS
 const peer = ref(null);
-const conn = ref(null);
-// const conns = ref([]);
 const conns = ref({});
 
 // messages
@@ -112,12 +111,10 @@ async function handle_keys(event) {
 }
 
 async function send_message(data) {
-    console.log(data, contact.value, conns.value);
     // Check if connection exists
     if (conns.value.hasOwnProperty(contact.value)) {
         const connection = conns.value[contact.value];
         connection.conn.send(data);
-
         connection.items.push({
             type: 'message',
             data: data.message,
