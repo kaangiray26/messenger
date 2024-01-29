@@ -8,29 +8,38 @@
                         <h1 class="fw-bold text-break mb-0">Messenger</h1>
                     </div>
                     <div class="d-flex px-3 mb-3">
+                        <span class="fw-bold">{{ name }}</span>
+                    </div>
+                    <div class="d-flex px-3 mb-3">
                         <div class="dropdown">
-                            <button class="btn material-symbols dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                            <span class="material-symbols-outlined dropdown-toggle" role="button" data-bs-toggle="dropdown"
                                 aria-expanded="false">
                                 more_horiz
-                            </button>
+                            </span>
                             <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" @click="changing = true">Change name</a></li>
                                 <li><a class="dropdown-item" @click="qr_visible = true">Show QR</a></li>
+                                <li><a class="dropdown-item" @click="logging_out = true">Log out</a></li>
                             </ul>
                         </div>
                     </div>
                     <div class="input-group px-2 mb-2">
                         <span class="input-group-text bi bi-search" id="username-search"></span>
-                        <input type="text" class="form-control" placeholder="Username" aria-label="Username"
-                            aria-describedby="username-search">
+                        <input v-model="query" type="text" class="form-control" placeholder="Search..."
+                            aria-label="Username" aria-describedby="username-search" @input="get_results">
                     </div>
                     <div class="contacts">
-                        <div v-for="item in contacts" class="contact" @click="open_chat(item)">
+                        <div v-for="item in results" class="contact" @click="open_chat(item)">
                             <div class="d-flex align-items-center">
-                                <img src="/images/person.svg" class="avatar">
-                                <span class="name">{{ item }}</span>
+                                <img src="/images/person.svg" class="avatar me-2">
+                                <div class="d-flex flex-column">
+                                    <span class="name">{{ item.name }}</span>
+                                    <span v-show="conns[item.secret].unavailable"
+                                        class="nord-text-11 fw-bold">Unavailable</span>
+                                </div>
                             </div>
                             <div class="d-flex justify-content-end align-items-center">
-                                <span v-show="conns[item].notification" class="notification"></span>
+                                <span v-show="conns[item.secret].notification" class="notification"></span>
                             </div>
                         </div>
                     </div>
@@ -39,22 +48,37 @@
             <div v-if="contact" class="right-pane" :class="{ 'd-block col-12': contact }">
                 <div class="d-flex flex-column h-100">
                     <div class="contact-header">
-                        <div class="d-flex align-items-center">
-                            <img src="/images/person.svg" class="avatar">
-                            <span class="name">{{ contact }}</span>
+                        <span class="material-symbols-outlined clickable me-3" @click="contact = null">
+                            arrow_back
+                        </span>
+                        <img src="/images/person.svg" class="avatar me-2">
+                        <span class="name">{{ contact.name }}</span>
+                        <div class="dropdown ms-auto">
+                            <span class="material-symbols-outlined dropdown-toggle" role="button" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                more_vert
+                            </span>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" @click="changing = true">Change name</a></li>
+                                <li><a class="dropdown-item" @click="delete_chat">Delete chat</a></li>
+                            </ul>
                         </div>
-                        <button class="btn btn-close" @click="contact = null"></button>
                     </div>
                     <div class="messages">
-                        <div v-for="(item, index) in conns[contact].items" class="message shadow"
+                        <div v-for="(item, index) in conns[contact.secret].items" class="message shadow"
                             :class="{ 'me': item.me }">
                             <span>{{ item.data }}</span>
                             <span class="time">{{ item.dt }}</span>
                         </div>
                     </div>
                     <div class="textarea-container">
-                        <textarea ref="textarea" v-model="message" class="form-control" placeholder="Type a message"
-                            rows="2" @keypress="handle_keys"></textarea>
+                        <textarea ref="textarea" v-model="message" class="form-control" placeholder="Message" rows="1"
+                            @keypress="handle_keys" @input="handle_input" autofocus></textarea>
+                        <div class="send-button" @click="handle_send">
+                            <span class="material-symbols-outlined">
+                                send
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -67,30 +91,62 @@
             </div>
             <p class="mb-0">Scan this QR code with your phone to connect</p>
             <img :src="qrcode" class="qr-code">
-            <p class="mb-0">Or just send this link:</p>
-            <span>{{ qrcode_data }}</span>
+            <p class="mb-0">Or copy the link below by clicking and send it to your friend:</p>
+            <span class="bg-primary text-light rounded clickable p-2 mt-2" @click="copy_qrcode">{{ qrcode_data }}</span>
         </div>
     </div>
-    <div v-if="!ready" class="ready">
+    <div v-if="!ready" class="overlay-blur">
         <div class="d-flex flex-column align-items-center">
             <img src="/images/star.svg" class="loading-icon">
             <span class="my-3">Loading...</span>
             <a href="/" class="btn btn-dark" @click="refresh">Refresh</a>
         </div>
     </div>
+    <div v-if="changing" class="overlay">
+        <div class="d-flex flex-column bg-light rounded shadow p-3">
+            <span class="fw-bold mb-3">Enter a new name</span>
+            <div class="input-group mb-3">
+                <span class="input-group-text" id="basic-addon1">@</span>
+                <input ref="name_input" type="text" class="form-control" placeholder="Username" aria-label="Username"
+                    aria-describedby="basic-addon1" @keypress.enter="change_name" autofocus>
+            </div>
+            <div class="d-flex justify-content-end">
+                <button class="btn btn-primary me-2" @click="change_name">Save</button>
+                <button class="btn btn-secondary" @click="changing = false">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <div v-if="logging_out" class="overlay">
+        <div class="d-flex flex-column bg-light rounded shadow p-3">
+            <span class="fw-bold mb-3">Are you sure you want to log out?</span>
+            <div class="d-flex justify-content-end">
+                <button class="btn btn-primary me-2" @click="logout">Yes</button>
+                <button class="btn btn-secondary" @click="logging_out = false">No</button>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script setup>
-import { ref, onBeforeMount, nextTick } from 'vue';
+import { ref, onBeforeMount, onMounted } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import QRCode from 'qrcode'
+import Fuse from 'fuse.js'
 
 const countdown = ref(0);
 const secret = ref(null);
+const name = ref(null);
 
 // states
 const ready = ref(false);
+const desktop = ref(false);
+const changing = ref(false);
+const logging_out = ref(false);
+
+// input
+const query = ref('');
+const name_input = ref(null);
 
 // textarea
 const message = ref('');
@@ -99,15 +155,22 @@ const textarea = ref(null);
 // PeerJS
 const peer = ref(null);
 const conns = ref({});
+const trying = ref({
+    id: null
+})
 
 // contacts
 const contact = ref(null);
 const contacts = ref([]);
+const results = ref([]);
 
 // qrcode
 const qrcode = ref(null);
 const qrcode_data = ref(null);
 const qr_visible = ref(false);
+
+// fuzzy search
+const fuse = ref(null);
 
 async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
@@ -132,6 +195,10 @@ async function generate_totp(key) {
     return code;
 }
 
+async function copy_qrcode() {
+    await navigator.clipboard.writeText(qrcode_data.value);
+}
+
 async function get_countdown() {
     countdown.value = 30 - (new Date().getUTCSeconds() % 30);
     if (countdown.value === 30) {
@@ -140,7 +207,7 @@ async function get_countdown() {
 }
 
 async function handle_keys(event) {
-    if (!event.shiftKey && event.key === 'Enter') {
+    if (desktop.value && !event.shiftKey && event.key === 'Enter') {
         event.preventDefault();
 
         // Return if message is empty
@@ -154,10 +221,68 @@ async function handle_keys(event) {
     }
 }
 
+async function handle_send() {
+    // Return if message is empty
+    if (!message.value.length) return;
+
+    // Send message
+    send_message({
+        type: 'message',
+        message: message.value
+    });
+}
+
+async function handle_input() {
+    // Check how many lines the textarea has
+    let lines = textarea.value.value.split('\n').length;
+
+    if (lines > 5) {
+        lines = 5;
+    }
+
+    textarea.value.rows = lines;
+}
+
+async function get_results() {
+    if (!query.value.length) {
+        results.value = contacts.value;
+        return;
+    }
+    results.value = fuse.value.search(query.value).map(item => item.item);
+}
+
+async function change_name() {
+    if (!name_input.value.value.length) return;
+
+    // If no contact is set change own name
+    if (!contact.value) {
+        name.value = name_input.value.value;
+        localStorage.setItem('name', name.value);
+        changing.value = false;
+        return
+    }
+
+    // Find the right contact in the array and change it
+    const index = contacts.value.findIndex(item => item.secret == contact.value.secret);
+    contacts.value[index].name = name_input.value.value;
+    save_contacts();
+
+    // Close the modal
+    changing.value = false;
+}
+
+async function logout() {
+    // Clear localStorage
+    localStorage.clear();
+
+    // Reload page
+    window.location.href = window.location.origin + window.location.pathname;
+}
+
 async function send_message(data) {
     // Check if connection exists
-    if (conns.value.hasOwnProperty(contact.value)) {
-        const connection = conns.value[contact.value];
+    if (conns.value.hasOwnProperty(contact.value.secret)) {
+        const connection = conns.value[contact.value.secret];
         connection.conn.send(data);
         connection.items.push({
             type: 'message',
@@ -172,7 +297,8 @@ async function send_message(data) {
 
 async function add_contact(item) {
     // Check if contact already exists
-    if (contacts.value.includes(item)) return;
+    const found = contacts.value.filter(ct => ct.secret == item).length;
+    if (found) return;
 
     const totp = await generate_totp(item);
     const connection = peer.value.connect(totp, {
@@ -186,45 +312,48 @@ async function add_contact(item) {
     connection.on('open', () => {
         connection.send({
             type: "handshake",
+            name: name.value,
             secret: secret.value
         })
         // Add contact
         conns.value[item] = {
             conn: null,
-            items: []
+            items: [],
+            unavailable: false,
+            notification: false,
         }
-        contacts.value.push(item);
+        contacts.value.push({
+            name: item,
+            secret: item
+        });
         save_contacts();
     })
 }
 
 async function open_chat(item) {
+    console.log('Open chat:', item);
     // Check if connection exists
-    if (conns.value.hasOwnProperty(item) && conns.value[item].conn) {
-        conns.value[item].notification = false;
+    if (conns.value.hasOwnProperty(item.secret) && conns.value[item.secret].conn) {
+        conns.value[item.secret].notification = false;
         contact.value = item;
-        nextTick().then(() => {
-            textarea.value.focus();
-        })
         return
     }
 
     // Create connection
-    const totp = await generate_totp(item);
+    const totp = await generate_totp(item.secret);
+    trying.value.id = item.secret;
     const connection = peer.value.connect(totp, {
         reliable: true,
         metadata: {
             from: secret.value,
-            to: item
+            to: item.secret,
         }
     })
     connection.on('open', () => {
+        handle_outgoing_connection(connection);
+        conns.value[item.secret].unable = false;
         contact.value = item;
-        nextTick().then(() => {
-            textarea.value.focus();
-        })
     })
-    handle_outgoing_connection(connection);
 }
 
 async function check_url_parameters() {
@@ -240,14 +369,20 @@ async function handle_incoming_connection(connection) {
     // Data handler
     connection.on('data', (data) => {
         console.log('Incoming data:', data);
+
         // Handshake handler
         if (data.type === 'handshake') {
             if (contacts.value.includes(data.secret)) return;
             conns.value[data.secret] = {
                 conn: null,
-                items: []
+                items: [],
+                unavailable: false,
+                notification: false,
             }
-            contacts.value.push(data.secret);
+            contacts.value.push({
+                name: data.name,
+                secret: data.secret
+            });
             save_contacts();
             return
         }
@@ -255,7 +390,7 @@ async function handle_incoming_connection(connection) {
         // Add message
         if (data.type === 'message') {
             // Set notification
-            if (contact.value != connection.metadata.from) {
+            if (contact.value.secret != connection.metadata.from) {
                 conns.value[connection.metadata.from].notification = true;
             }
             conns.value[connection.metadata.from].items.push({
@@ -279,7 +414,7 @@ async function handle_outgoing_connection(connection) {
     // Add message to list
     connection.on('data', (data) => {
         if (data.type === 'message') {
-            if (contact.value != connection.metadata.to) {
+            if (contact.value.secret != connection.metadata.to) {
                 conns.value[connection.metadata.to].notification = true;
             }
             conns.value[connection.metadata.to].items.push({
@@ -309,6 +444,12 @@ async function peer_first_setup() {
         ready.value = true;
         check_url_parameters()
     });
+    peer.value.on('error', (error) => {
+        if (error.type == 'peer-unavailable') {
+            console.log('Peer unavailable:', trying.value.id);
+            conns.value[trying.value.id].unavailable = true;
+        }
+    })
 }
 
 async function peer_setup() {
@@ -321,6 +462,12 @@ async function peer_setup() {
     peer.value.on('open', () => {
         console.log('New Peer created:', peer.value.id);
     })
+    peer.value.on('error', (error) => {
+        if (error.type == 'peer-unavailable' && trying.value.id) {
+            console.log('Peer unavailable:', trying.value.id);
+            conns.value[trying.value.id].unavailable = true;
+        }
+    })
 }
 
 async function save_contacts() {
@@ -331,11 +478,14 @@ async function load_contacts() {
     const data = localStorage.getItem('contacts');
     if (data) {
         contacts.value = JSON.parse(data);
+        results.value = contacts.value;
     }
     contacts.value.map(item => {
-        conns.value[item] = {
+        conns.value[item.secret] = {
             conn: null,
-            items: []
+            items: [],
+            unavailable: false,
+            notification: false,
         }
     })
 }
@@ -346,6 +496,7 @@ onBeforeMount(async () => {
         localStorage.setItem('secret', await generate_secret());
     }
     secret.value = localStorage.getItem('secret');
+    name.value = localStorage.getItem('name') || secret.value;
     console.log('Secret:', secret.value);
 
     // Setup peer and check for url parameters
@@ -353,6 +504,11 @@ onBeforeMount(async () => {
 
     // Load contacts
     load_contacts();
+
+    // Set device mode
+    if (window.innerWidth > 768) {
+        desktop.value = true;
+    }
 
     // Create qr code
     qrcode_data.value = window.location.href + `?add=${secret.value}`;
@@ -377,5 +533,12 @@ onBeforeMount(async () => {
     setInterval(() => {
         get_countdown();
     }, 1000);
+})
+
+onMounted(() => {
+    fuse.value = new Fuse(contacts.value, {
+        keys: ['name', 'secret'],
+        threshold: 0.3,
+    })
 })
 </script>
