@@ -484,6 +484,8 @@ async function peer_setup() {
 
 async function save_contacts() {
     localStorage.setItem('contacts', JSON.stringify(contacts.value));
+    results.value = contacts.value;
+    fuse.value.setCollection(contacts.value);
 }
 
 async function load_contacts() {
