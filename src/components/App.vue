@@ -128,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeMount, onMounted } from 'vue';
+import { ref, onBeforeMount, onMounted, onBeforeUnmount } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import QRCode from 'qrcode'
@@ -443,6 +443,7 @@ async function handle_incoming_connection(connection) {
             // Set notification
             if (!contact.value || contact.value.secret != connection.metadata.from) {
                 conns.value[connection.metadata.from].notification = true;
+                create_notification(connection.metadata.from, data.message);
             }
             conns.value[connection.metadata.from].items.push({
                 type: 'message',
@@ -494,6 +495,7 @@ async function handle_outgoing_connection(connection) {
         if (data.type === 'message') {
             if (!contact.value || contact.value.secret != connection.metadata.to) {
                 conns.value[connection.metadata.to].notification = true;
+                create_notification(connection.metadata.to, data.message);
             }
             conns.value[connection.metadata.to].items.push({
                 type: 'message',
@@ -579,6 +581,21 @@ async function load_contacts() {
     })
 }
 
+async function create_notification(title, body) {
+    Notification.requestPermission().then((result) => {
+        if (result === "granted") {
+            navigator.serviceWorker.ready.then((registration) => {
+                registration.showNotification(title, {
+                    body: body,
+                    icon: "/messenger/images/512x512.png",
+                    vibrate: [200, 100, 200, 100, 200, 100, 200],
+                    tag: "vibration-sample",
+                });
+            });
+        }
+    });
+}
+
 onBeforeMount(async () => {
     // Generate one time secret if empty
     if (localStorage.getItem('secret') === null) {
@@ -615,6 +632,12 @@ onBeforeMount(async () => {
         qrcode.value = url;
     })
 
+    // Create fuzzy search
+    fuse.value = new Fuse(contacts.value, {
+        keys: ['name', 'secret'],
+        threshold: 0.3,
+    })
+
     // Generate TOTP
     get_countdown();
 
@@ -622,12 +645,5 @@ onBeforeMount(async () => {
     setInterval(() => {
         get_countdown();
     }, 1000);
-})
-
-onMounted(() => {
-    fuse.value = new Fuse(contacts.value, {
-        keys: ['name', 'secret'],
-        threshold: 0.3,
-    })
 })
 </script>

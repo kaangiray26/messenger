@@ -5,8 +5,14 @@ import App from '/components/App.vue'
 import '/scss/styles.scss'
 import '/assets/styles.css'
 
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register("/serviceworker.js");
+async function register_worker() {
+    if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.register("/messenger/serviceworker.js", {
+            scope: "/messenger/"
+        });
+    }
 }
 
-createApp(App).mount('#app');
+register_worker().then(() => {
+    createApp(App).mount('#app');
+})

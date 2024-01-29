@@ -5,38 +5,38 @@
     "short_name": "Msg",
     "icons": [
         {
-            "src": "/images/44x44.png",
+            "src": "/messenger/images/44x44.png",
             "sizes": "44x44",
             "type": "image/png"
         },
         {
-            "src": "/images/50x50.png",
+            "src": "/messenger/images/50x50.png",
             "sizes": "50x50",
             "type": "image/png"
         },
         {
-            "src": "/images/96x96.png",
+            "src": "/messenger/images/96x96.png",
             "sizes": "96x96",
             "type": "image/png"
         },
         {
-            "src": "/images/192x192.png",
+            "src": "/messenger/images/192x192.png",
             "sizes": "192x192",
             "type": "image/png"
         },
         {
-            "src": "/images/256x256.png",
+            "src": "/messenger/images/256x256.png",
             "sizes": "256x256",
             "type": "image/png"
         },
         {
-            "src": "/images/512x512.png",
+            "src": "/messenger/images/512x512.png",
             "sizes": "512x512",
             "type": "image/png"
         }
     ],
-    "id": "/",
-    "start_url": "/",
+    "id": "/messenger/",
+    "start_url": "/messenger/",
     "description": "A P2P Messenger",
     "orientation": "portrait",
     "display": "standalone",
