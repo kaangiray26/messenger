@@ -17,9 +17,13 @@
                                 more_horiz
                             </span>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" @click="changing = true">Change name</a></li>
-                                <li><a class="dropdown-item" @click="qr_visible = true">Show QR</a></li>
-                                <li><a class="dropdown-item" @click="logging_out = true">Log out</a></li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="changing = true">Change name</a>
+                                </li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="qr_visible = true">Show QR</a></li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="adding = true">Add code</a></li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="qr_scan">Scan QR</a></li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="logging_out = true">Log out</a>
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -89,10 +93,8 @@
             <div class="d-flex justify-content-end mb-3">
                 <button class="btn btn-close" @click="qr_visible = false"></button>
             </div>
-            <p class="mb-0">Scan this QR code with your phone to connect</p>
-            <img :src="qrcode" class="qr-code">
-            <p class="mb-0">Or copy the link below by clicking and send it to your friend:</p>
-            <span class="bg-primary text-light rounded clickable p-2 mt-2" @click="copy_qrcode">{{ qrcode_data }}</span>
+            <p class="mb-0">Scan this QR code to connect or click on it to copy.</p>
+            <img :src="qrcode" class="qr-code" @click="copy_qrcode">
         </div>
     </div>
     <div v-if="!ready" class="overlay-blur">
@@ -125,14 +127,36 @@
             </div>
         </div>
     </div>
+    <div v-if="scanning" class="overlay-dark p-3">
+        <div class="d-flex flex-column rounded">
+            <canvas ref="canvas"></canvas>
+            <span class="text-center text-light mt-3">Scan a Messenger QR code</span>
+            <button class="btn btn-outline-light mt-1 mx-auto" @click="stop_qr_scan">Cancel</button>
+        </div>
+    </div>
+    <div v-if="adding" class="overlay">
+        <div class="d-flex flex-column bg-light rounded shadow p-3">
+            <span class="fw-bold mb-3">Enter code</span>
+            <div class="input-group mb-3">
+                <span class="input-group-text bi bi-qr-code" id="basic-code"></span>
+                <input ref="code_input" type="text" class="form-control" placeholder="Code" aria-label="Code"
+                    aria-describedby="basic-code" @keypress.enter="change_name" autofocus>
+            </div>
+            <div class="d-flex justify-content-end">
+                <button class="btn btn-primary me-2" @click="add_code">Add</button>
+                <button class="btn btn-secondary" @click="adding = false">Cancel</button>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script setup>
-import { ref, onBeforeMount, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onBeforeMount, nextTick } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
+import jsQR from "jsqr";
 
 const countdown = ref(0);
 const secret = ref(null);
@@ -141,12 +165,15 @@ const name = ref(null);
 // states
 const ready = ref(false);
 const desktop = ref(false);
+const adding = ref(false);
 const changing = ref(false);
 const logging_out = ref(false);
+const scanning = ref(false);
 
 // input
 const query = ref('');
 const name_input = ref(null);
+const code_input = ref(null);
 
 // textarea
 const message = ref('');
@@ -165,6 +192,9 @@ const contacts = ref([]);
 const results = ref([]);
 
 // qrcode
+const video = ref(null);
+const canvas = ref(null);
+const context = ref(null);
 const qrcode = ref(null);
 const qrcode_data = ref(null);
 const qr_visible = ref(false);
@@ -197,7 +227,6 @@ async function generate_totp(key) {
 
 async function copy_qrcode() {
     await navigator.clipboard.writeText(qrcode_data.value);
-    qr_visible.value = false;
 }
 
 async function get_countdown() {
@@ -250,6 +279,12 @@ async function get_results() {
         return;
     }
     results.value = fuse.value.search(query.value).map(item => item.item);
+}
+
+async function add_code() {
+    if (!code_input.value.value.length) return;
+    add_contact(code_input.value.value);
+    adding.value = false;
 }
 
 async function change_name() {
@@ -410,6 +445,74 @@ async function check_url_parameters() {
     }
 }
 
+async function stop_qr_scan() {
+    scanning.value = false;
+    video.value.srcObject.getTracks().forEach(track => track.stop());
+    video.value.remove();
+    canvas.value.remove();
+    context.value = null;
+    video.value = null;
+    canvas.value = null;
+}
+
+async function qr_scan() {
+    scanning.value = true;
+    await nextTick();
+
+    video.value = document.createElement("video");
+    context.value = canvas.value.getContext("2d");
+
+    navigator.mediaDevices
+        .getUserMedia({
+            video: {
+                facingMode: "environment"
+            }, audio: false
+        })
+        .then((stream) => {
+            video.value.srcObject = stream;
+            video.value.setAttribute("playsinline", true);
+            video.value.play();
+            requestAnimationFrame(tick);
+        })
+        .catch((err) => {
+            console.error(`An error occurred: ${err}`);
+        });
+}
+
+function drawLine(begin, end, color) {
+    context.value.beginPath();
+    context.value.moveTo(begin.x, begin.y);
+    context.value.lineTo(end.x, end.y);
+    context.value.lineWidth = 4;
+    context.value.strokeStyle = color;
+    context.value.stroke();
+}
+
+function tick() {
+    if (!scanning.value) return;
+    if (video.value.readyState === video.value.HAVE_ENOUGH_DATA) {
+        canvas.value.height = video.value.videoHeight;
+        canvas.value.width = video.value.videoWidth;
+        context.value.drawImage(video.value, 0, 0, canvas.value.width, canvas.value.height);
+
+        let imageData = context.value.getImageData(0, 0, canvas.value.width, canvas.value.height);
+        let code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+        });
+
+        if (code) {
+            drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+            drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+            drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+            drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+
+            add_contact(code.data);
+            stop_qr_scan();
+        }
+    }
+    requestAnimationFrame(tick);
+}
+
 async function handle_incoming_connection(connection) {
     // Data handler
     connection.on('data', (data) => {
@@ -419,6 +522,7 @@ async function handle_incoming_connection(connection) {
             const found = contacts.value.filter(ct => ct.secret == data.secret).length;
             if (found) return;
 
+            qr_visible.value = false;
             conns.value[data.secret] = {
                 conn: null,
                 items: [],
@@ -531,7 +635,6 @@ async function peer_first_setup() {
     })
     peer.value.on('open', () => {
         ready.value = true;
-        check_url_parameters()
     });
     peer.value.on('error', (error) => {
         if (error.type == 'peer-unavailable' && trying.value.id) {
@@ -617,7 +720,7 @@ onBeforeMount(async () => {
     }
 
     // Create qr code
-    qrcode_data.value = window.location.href + `?add=${secret.value}`;
+    qrcode_data.value = secret.value;
     QRCode.toDataURL(qrcode_data.value, {
         errorCorrectionLevel: 'H',
         type: 'image/jpeg',

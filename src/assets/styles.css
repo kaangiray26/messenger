@@ -11,6 +11,15 @@ body {
     background-color: #d8dee9;
 }
 
+.dropdown-menu {
+    padding: 0;
+}
+
+.dropdown-item {
+    color: black !important;
+    padding: 0.5rem 1rem !important;
+}
+
 textarea {
     resize: none;
     border: none !important;
@@ -44,6 +53,12 @@ textarea:focus {
     align-items: center;
     margin-left: 0.25rem;
     color: white;
+}
+
+canvas {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
 }
 
 #app {
@@ -209,10 +224,31 @@ textarea:focus {
     width: 100%;
     height: auto;
     object-fit: contain;
+    cursor: pointer;
+}
+
+.qr-code:active {
+    scale: 0.95;
+    transition: .1s;
 }
 
 .qr-container {
     animation: popUp 0.1s ease-out;
+}
+
+.overlay-dark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+    background-color: rgba(0, 0, 0, 0.5);
 }
 
 .overlay-blur {
@@ -246,6 +282,14 @@ textarea:focus {
     width: 100px;
     height: 100px;
     animation: rotate 2s linear infinite;
+}
+
+.scanner {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    aspect-ratio: 1 !important;
+    box-shadow: inset 0 0 10px 10px #000000;
 }
 
 /** Nord colors **/
