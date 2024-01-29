@@ -1,16 +1,22 @@
 <template>
     <div class="container d-flex flex-fill h-100 py-3">
         <div class="row row-cols-2 g-0 flex-fill shadow">
-            <div class="col col-3 left-pane">
+            <div class="col-12 col-md-3 left-pane">
                 <div class="d-flex flex-column h-100">
-                    <div class="d-flex align-items-center p-3">
+                    <div class="d-flex flex-wrap align-items-center p-3">
                         <h1 class="material-symbols pe-2 mb-0">voice_selection</h1>
-                        <h1 class="fw-bold mb-0">Messenger</h1>
+                        <h1 class="fw-bold text-break mb-0">Messenger</h1>
                     </div>
                     <div class="d-flex px-3 mb-3">
-                        <div class="d-inline-flex flex-wrap align-items-center">
-                            <span class="me-3">Secret:</span>
-                            <input type="text" class="secret" v-model="secret" />
+                        <div class="dropdown">
+                            <button class="btn material-symbols dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                more_horiz
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" @click="qr_visible = true">Show QR</a></li>
+                                <li><a class="dropdown-item" @click="scan_qr">Scan QR</a></li>
+                            </ul>
                         </div>
                     </div>
                     <div class="input-group px-2 mb-2">
@@ -20,25 +26,48 @@
                     </div>
                     <div class="contacts">
                         <div v-for="item in contacts" class="contact" @click="open_chat(item)">
-                            <img src="/images/person.svg" class="avatar">
-                            <span>{{ item }}</span>
+                            <div class="d-flex align-items-center">
+                                <img src="/images/person.svg" class="avatar">
+                                <span class="name">{{ item }}</span>
+                            </div>
+                            <div class="d-flex justify-content-end align-items-center">
+                                <span v-show="conns[item].notification" class="notification"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col col-9 right-pane">
-                <div v-if="contact" class="d-flex flex-column h-100">
-                    <div class="messages mb-3">
+            <div v-if="contact" class="right-pane" :class="{ 'd-block col-12': contact }">
+                <div class="d-flex flex-column h-100">
+                    <div class="contact-header">
+                        <div class="d-flex align-items-center">
+                            <img src="/images/person.svg" class="avatar">
+                            <span class="name">{{ contact }}</span>
+                        </div>
+                        <button class="btn btn-close" @click="contact = null"></button>
+                    </div>
+                    <div class="messages">
                         <div v-for="(item, index) in conns[contact].items" class="message shadow"
                             :class="{ 'me': item.me }">
                             <span>{{ item.data }}</span>
                             <span class="time">{{ item.dt }}</span>
                         </div>
                     </div>
-                    <textarea ref="textarea" v-model="message" class="form-control" placeholder="Type a message" rows="2"
-                        @keypress="handle_keys"></textarea>
+                    <div class="textarea-container">
+                        <textarea ref="textarea" v-model="message" class="form-control" placeholder="Type a message"
+                            rows="2" @keypress="handle_keys"></textarea>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+    <div v-if="qr_visible" id="qr">
+        <div class="qr-container d-flex flex-column bg-white shadow p-3">
+            <div class="d-flex justify-content-end mb-3">
+                <button class="btn btn-close" @click="qr_visible = false"></button>
+            </div>
+            <p class="mb-0">Scan this QR code with your phone to connect</p>
+            <img :src="qrcode" class="qr-code">
         </div>
     </div>
 </template>
@@ -46,6 +75,8 @@
 <script setup>
 import { ref, onBeforeMount, nextTick } from 'vue';
 import { Peer } from 'peerjs';
+import { Dropdown } from 'bootstrap';
+import QRCode from 'qrcode'
 
 const countdown = ref(0);
 const secret = ref(null);
@@ -58,12 +89,13 @@ const textarea = ref(null);
 const peer = ref(null);
 const conns = ref({});
 
-// messages
-const items = ref({});
-
 // contacts
 const contact = ref(null);
-const contacts = ['eb864056d578fbca', '1e206d8eff4f4eac'];
+const contacts = ['eb864056d578fbca', '7ae9f7275a5adaba'];
+
+// qrcode
+const qrcode = ref(null);
+const qr_visible = ref(false);
 
 async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
@@ -110,9 +142,16 @@ async function handle_keys(event) {
     }
 }
 
+async function show_qr() {
+    QRCode.toDataURL(secret.value).then(url => {
+        qrcode.value = url;
+    })
+}
+
 async function send_message(data) {
     // Check if connection exists
     if (conns.value.hasOwnProperty(contact.value)) {
+        console.log('Sending message:', conns.value);
         const connection = conns.value[contact.value];
         connection.conn.send(data);
         connection.items.push({
@@ -127,8 +166,10 @@ async function send_message(data) {
 }
 
 async function open_chat(item) {
+    console.log('Opening chat:', item);
     // Check if connection exists
-    if (conns.value.hasOwnProperty(item)) {
+    if (conns.value.hasOwnProperty(item) && conns.value[item].conn) {
+        conns.value[item].notification = false;
         contact.value = item;
         nextTick().then(() => {
             textarea.value.focus();
@@ -145,7 +186,9 @@ async function open_chat(item) {
             to: item
         }
     })
+    console.log('Connection created:', connection);
     connection.on('open', () => {
+        console.log('Connected to:', item);
         contact.value = item;
         nextTick().then(() => {
             textarea.value.focus();
@@ -157,7 +200,12 @@ async function open_chat(item) {
 async function handle_incoming_connection(connection) {
     // Add message to list
     connection.on('data', (data) => {
-        console.log(data, connection.metadata.from);
+        // Set notification
+        if (contact.value !== connection.metadata.from) {
+            conns.value[connection.metadata.from].notification = true;
+        }
+
+        // Add message
         if (data.type === 'message') {
             conns.value[connection.metadata.from].items.push({
                 type: 'message',
@@ -167,6 +215,8 @@ async function handle_incoming_connection(connection) {
             });
         }
     });
+
+    // Add connection to list
     conns.value[connection.metadata.from] = {
         conn: connection,
         items: []
@@ -176,7 +226,6 @@ async function handle_incoming_connection(connection) {
 async function handle_outgoing_connection(connection) {
     // Add message to list
     connection.on('data', (data) => {
-        console.log(data, connection.metadata.to);
         if (data.type === 'message') {
             conns.value[connection.metadata.to].items.push({
                 type: 'message',
@@ -186,6 +235,8 @@ async function handle_outgoing_connection(connection) {
             });
         }
     });
+
+    // Add connection to list
     conns.value[connection.metadata.to] = {
         conn: connection,
         items: []
@@ -208,7 +259,36 @@ onBeforeMount(async () => {
         localStorage.setItem('secret', await generate_secret());
     }
     secret.value = localStorage.getItem('secret');
+    console.log('Secret:', secret.value);
     peer_setup();
+
+    // Create connection templates
+    for (const item of contacts) {
+        conns.value[item] = {
+            conn: null,
+            items: []
+        }
+    }
+
+    // Check url for add parameter
+    const url = new URL(window.location.href);
+    const add = url.searchParams.get('add');
+    if (add) open_chat(add);
+
+    // Create qr code
+    QRCode.toDataURL(`https://messenger.buzl.uk/?add=${secret.value}`, {
+        errorCorrectionLevel: 'H',
+        type: 'image/jpeg',
+        quality: 1,
+        margin: 1,
+        width: 256,
+        color: {
+            dark: '#000000',
+            light: '#ffffff'
+        }
+    }).then(url => {
+        qrcode.value = url;
+    })
 
     // Generate TOTP
     get_countdown();
