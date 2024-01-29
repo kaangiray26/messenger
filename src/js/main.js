@@ -5,4 +5,8 @@ import App from '/components/App.vue'
 import '/scss/styles.scss'
 import '/assets/styles.css'
 
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register("/serviceworker.js");
+}
+
 createApp(App).mount('#app');
