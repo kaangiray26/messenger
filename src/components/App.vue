@@ -271,6 +271,19 @@ async function change_name() {
     changing.value = false;
 }
 
+async function delete_chat() {
+    // Remove contact from array
+    const index = contacts.value.findIndex(item => item.secret == contact.value.secret);
+    contacts.value.splice(index, 1);
+    save_contacts();
+
+    // Remove connection from array
+    delete conns.value[contact.value.secret];
+
+    // Close the chat
+    contact.value = null;
+}
+
 async function logout() {
     // Clear localStorage
     localStorage.clear();
@@ -331,7 +344,6 @@ async function add_contact(item) {
 }
 
 async function open_chat(item) {
-    console.log('Open chat:', item);
     // Check if connection exists
     if (conns.value.hasOwnProperty(item.secret) && conns.value[item.secret].conn) {
         conns.value[item.secret].notification = false;
