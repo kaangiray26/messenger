@@ -78,7 +78,7 @@
                     </div>
                     <div class="textarea-container">
                         <textarea ref="textarea" v-model="message" class="form-control" placeholder="Message" rows="1"
-                            @keypress="handle_keys" @input="handle_input" autofocus></textarea>
+                            @keypress="handle_keys" @input="handle_input" @focus="open_keyboard"></textarea>
                         <div class="send-button" @click="handle_send">
                             <span class="material-symbols-outlined">
                                 send
@@ -242,6 +242,7 @@ async function get_countdown() {
 
 async function handle_keys(event) {
     if (desktop.value && !event.shiftKey && event.key === 'Enter') {
+        textarea.value.focus();
         event.preventDefault();
 
         // Return if message is empty
@@ -256,6 +257,8 @@ async function handle_keys(event) {
 }
 
 async function handle_send() {
+    textarea.value.focus();
+
     // Return if message is empty
     if (!message.value.length) return;
 
@@ -322,6 +325,11 @@ async function delete_chat() {
 
     // Close the chat
     contact.value = null;
+}
+
+async function open_keyboard() {
+    console.log("Opening keyboard...");
+    if ("virtualKeyboard" in navigator) navigator.virtualKeyboard.show();
 }
 
 async function logout() {
@@ -694,11 +702,12 @@ async function load_contacts() {
     })
 }
 
-async function create_notification(title, body) {
+async function create_notification(secret, body) {
+    const name = contacts.value.find(item => item.secret == secret).name;
     Notification.requestPermission().then((result) => {
         if (result === "granted") {
             navigator.serviceWorker.ready.then((registration) => {
-                registration.showNotification(title, {
+                registration.showNotification(name, {
                     body: body,
                     icon: "/messenger/images/512x512.png",
                     vibrate: [200, 100, 200, 100, 200, 100, 200],
@@ -717,6 +726,11 @@ onBeforeMount(async () => {
     secret.value = localStorage.getItem('secret');
     name.value = localStorage.getItem('name') || secret.value;
     console.log('Secret:', secret.value);
+
+    // Configure the virtual keyboard
+    if ("virtualKeyboard" in navigator) {
+        navigator.virtualKeyboard.overlaysContent = true;
+    }
 
     // Setup peer and check for url parameters
     peer_first_setup();
