@@ -295,7 +295,7 @@ async function logout() {
 
 async function send_message(data) {
     // Check if connection exists
-    if (conns.value.hasOwnProperty(contact.value.secret)) {
+    if (conns.value[contact.value.secret].conn) {
         const connection = conns.value[contact.value.secret];
         connection.conn.send(data);
         connection.items.push({
@@ -307,6 +307,27 @@ async function send_message(data) {
         message.value = '';
         return
     }
+
+    // Create connection and send the message
+    const totp = await generate_totp(contact.value.secret);
+    const connection = peer.value.connect(totp, {
+        reliable: true,
+        metadata: {
+            from: secret.value,
+            to: contact.value.secret,
+        }
+    })
+    connection.on('open', () => {
+        handle_outgoing_connection(connection);
+        connection.send(data);
+        conns.value[contact.value.secret].items.push({
+            type: 'message',
+            data: data.message,
+            me: true,
+            dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
+        });
+        message.value = '';
+    })
 }
 
 async function add_contact(item) {
