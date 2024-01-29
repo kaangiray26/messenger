@@ -63,8 +63,9 @@
                                 more_vert
                             </span>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" @click="changing = true">Change name</a></li>
-                                <li><a class="dropdown-item" @click="delete_chat">Delete chat</a></li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="changing = true">Change name</a>
+                                </li>
+                                <li class="dropdown-li"><a class="dropdown-item" @click="delete_chat">Delete chat</a></li>
                             </ul>
                         </div>
                     </div>
