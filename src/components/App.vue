@@ -69,7 +69,7 @@
                             </ul>
                         </div>
                     </div>
-                    <div class="messages">
+                    <div ref="messages" class="messages">
                         <div v-for="(item, index) in conns[contact.secret].items" class="message shadow"
                             :class="{ 'me': item.me }">
                             <span>{{ item.data }}</span>
@@ -191,6 +191,9 @@ const trying = ref({
 const contact = ref(null);
 const contacts = ref([]);
 const results = ref([]);
+
+// messages
+const messages = ref(null);
 
 // qrcode
 const video = ref(null);
@@ -341,6 +344,12 @@ async function send_message(data) {
             dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
         });
         message.value = '';
+        nextTick(() => {
+            messages.value.scroll({
+                top: messages.value.scrollHeight,
+                behavior: 'smooth'
+            })
+        })
         return
     }
 
