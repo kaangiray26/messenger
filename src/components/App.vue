@@ -1,5 +1,5 @@
 <template>
-    <div class="container d-flex flex-fill h-100 py-3">
+    <div class="page container d-flex flex-fill h-100">
         <div class="row row-cols-2 g-0 flex-fill shadow">
             <div class="col-12 col-md-3 left-pane">
                 <div class="d-flex flex-column h-100">
@@ -27,7 +27,7 @@
                             </ul>
                         </div>
                     </div>
-                    <div class="input-group px-2 mb-2">
+                    <div class="input-group px-3 mb-2">
                         <span class="input-group-text bi bi-search" id="username-search"></span>
                         <input v-model="query" type="text" class="form-control" placeholder="Search..."
                             aria-label="Username" aria-describedby="username-search" @input="get_results">
@@ -631,7 +631,6 @@ async function handle_outgoing_connection(connection) {
     // Close handler
     connection.on('close', () => {
         console.log('Connection closed:', connection.metadata.to);
-        console.log(conns.value);
         conns.value[connection.metadata.to].conn = null;
     })
 
