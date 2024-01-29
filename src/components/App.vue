@@ -99,7 +99,7 @@
         <div class="d-flex flex-column align-items-center">
             <img src="/images/star.svg" class="loading-icon">
             <span class="my-3">Loading...</span>
-            <a href="/" class="btn btn-dark" @click="refresh">Refresh</a>
+            <span class="btn btn-dark" @click="refresh">Refresh</span>
         </div>
     </div>
     <div v-if="changing" class="overlay">
@@ -197,6 +197,7 @@ async function generate_totp(key) {
 
 async function copy_qrcode() {
     await navigator.clipboard.writeText(qrcode_data.value);
+    qr_visible.value = false;
 }
 
 async function get_countdown() {
@@ -328,19 +329,30 @@ async function add_contact(item) {
             name: name.value,
             secret: secret.value
         })
-        // Add contact
-        conns.value[item] = {
-            conn: null,
-            items: [],
-            unavailable: false,
-            notification: false,
-        }
-        contacts.value.push({
-            name: item,
-            secret: item
-        });
-        save_contacts();
     })
+
+    connection.on('data', (data) => {
+        if (data.type == "handshake") {
+            conns.value[data.secret] = {
+                conn: null,
+                items: [],
+                unavailable: false,
+                notification: false,
+            }
+            contacts.value.push({
+                name: data.name,
+                secret: data.secret
+            });
+            save_contacts();
+
+            // Close connection
+            connection.close();
+        }
+    })
+}
+
+async function refresh() {
+    window.location.href = window.location.origin + window.location.pathname;
 }
 
 async function open_chat(item) {
@@ -381,9 +393,67 @@ async function handle_incoming_connection(connection) {
     // Data handler
     connection.on('data', (data) => {
         console.log('Incoming data:', data);
+        // Handle handshake
+        if (data.type == 'handshake') {
+            const found = contacts.value.filter(ct => ct.secret == data.secret).length;
+            if (found) return;
 
-        // Handshake handler
-        if (data.type === 'handshake') {
+            conns.value[data.secret] = {
+                conn: null,
+                items: [],
+                unavailable: false,
+                notification: false,
+            }
+            contacts.value.push({
+                name: data.name,
+                secret: data.secret
+            });
+            save_contacts();
+            connection.send({
+                type: 'handshake',
+                name: name.value,
+                secret: secret.value
+            })
+            return
+        }
+
+        // Handle message
+        if (data.type === 'message') {
+            // Set notification
+            if (!contact.value || contact.value.secret != connection.metadata.from) {
+                conns.value[connection.metadata.from].notification = true;
+            }
+            conns.value[connection.metadata.from].items.push({
+                type: 'message',
+                data: data.message,
+                me: false,
+                dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
+            });
+            return
+        }
+    });
+
+    // Close handler
+    connection.on('close', () => {
+        console.log('Connection closed:', connection.metadata.from);
+        conns.value[connection.metadata.from].conn = null;
+    })
+
+    // Add connection to list
+    conns.value[connection.metadata.from] = {
+        conn: connection,
+        items: [],
+        unavailable: false,
+        notification: false,
+    }
+}
+
+async function handle_outgoing_connection(connection) {
+    // Add message to list
+    connection.on('data', (data) => {
+        console.log('Outgoing data:', data);
+        // Handle shakehand
+        if (data.type === 'shakehand') {
             if (contacts.value.includes(data.secret)) return;
             conns.value[data.secret] = {
                 conn: null,
@@ -399,34 +469,9 @@ async function handle_incoming_connection(connection) {
             return
         }
 
-        // Add message
+        // Handle message
         if (data.type === 'message') {
-            // Set notification
-            if (contact.value.secret != connection.metadata.from) {
-                conns.value[connection.metadata.from].notification = true;
-            }
-            conns.value[connection.metadata.from].items.push({
-                type: 'message',
-                data: data.message,
-                me: false,
-                dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
-            });
-            return
-        }
-    });
-
-    // Add connection to list
-    conns.value[connection.metadata.from] = {
-        conn: connection,
-        items: []
-    }
-}
-
-async function handle_outgoing_connection(connection) {
-    // Add message to list
-    connection.on('data', (data) => {
-        if (data.type === 'message') {
-            if (contact.value.secret != connection.metadata.to) {
+            if (!contact.value || contact.value.secret != connection.metadata.to) {
                 conns.value[connection.metadata.to].notification = true;
             }
             conns.value[connection.metadata.to].items.push({
@@ -438,10 +483,19 @@ async function handle_outgoing_connection(connection) {
         }
     });
 
+    // Close handler
+    connection.on('close', () => {
+        console.log('Connection closed:', connection.metadata.to);
+        console.log(conns.value);
+        conns.value[connection.metadata.to].conn = null;
+    })
+
     // Add connection to list
     conns.value[connection.metadata.to] = {
         conn: connection,
-        items: []
+        items: [],
+        unavailable: false,
+        notification: false,
     }
 }
 
@@ -457,7 +511,7 @@ async function peer_first_setup() {
         check_url_parameters()
     });
     peer.value.on('error', (error) => {
-        if (error.type == 'peer-unavailable') {
+        if (error.type == 'peer-unavailable' && trying.value.id) {
             console.log('Peer unavailable:', trying.value.id);
             conns.value[trying.value.id].unavailable = true;
         }
