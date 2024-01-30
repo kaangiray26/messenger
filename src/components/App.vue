@@ -8,7 +8,7 @@
                         <h1 class="fw-bold text-break mb-0">Messenger</h1>
                     </div>
                     <div class="d-flex px-3 mb-3">
-                        <span class="fw-bold">{{ name }}</span>
+                        <span class="fw-bold selectable">{{ name }}</span>
                     </div>
                     <div class="d-flex px-3 mb-3">
                         <div class="dropdown">
@@ -72,7 +72,7 @@
                     <div ref="messages" class="messages">
                         <div v-for="(item, index) in conns[contact.secret].items" class="message shadow"
                             :class="{ 'me': item.me }">
-                            <span>{{ item.data }}</span>
+                            <span class="selectable">{{ item.data }}</span>
                             <span class="time">{{ item.dt }}</span>
                         </div>
                     </div>

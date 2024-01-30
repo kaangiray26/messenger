@@ -9,6 +9,7 @@ body {
     margin: 0;
     height: 100%;
     background-color: #d8dee9;
+    user-select: none;
 }
 
 .dropdown-menu {
@@ -34,6 +35,10 @@ textarea {
 textarea:focus {
     outline: none !important;
     box-shadow: none !important;
+}
+
+.selectable {
+    user-select: text !important;
 }
 
 .textarea-container {
@@ -129,6 +134,10 @@ canvas {
 .message.me {
     align-self: end;
     background-color: #5e81ac;
+    color: white;
+}
+
+.message.me .time {
     color: white;
 }
 
