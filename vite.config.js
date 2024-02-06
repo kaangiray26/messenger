@@ -8,7 +8,6 @@ const path = require('path')
 // https://vitejs.dev/config/
 export default defineConfig({
     root: path.resolve(__dirname, 'src'),
-    base: '/messenger/',
     server: {
         port: 8000,
         hot: true,

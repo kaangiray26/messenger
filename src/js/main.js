@@ -7,12 +7,11 @@ import '/assets/styles.css'
 
 async function register_worker() {
     if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.register("/messenger/serviceworker.js", {
-            scope: "/messenger/"
-        });
+        await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        console.log('Service Worker Registered');
     }
 }
 
-register_worker().then(() => {
-    createApp(App).mount('#app');
-})
+createApp(App).mount('#app');
+// register_worker().then(() => {
+// })

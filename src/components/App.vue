@@ -155,6 +155,8 @@
 import { ref, onBeforeMount, nextTick } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
+import { initializeApp } from "firebase/app";
+import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
 import jsQR from "jsqr";
@@ -205,6 +207,20 @@ const qr_visible = ref(false);
 
 // fuzzy search
 const fuse = ref(null);
+
+// firebase
+const app = ref(null);
+const messaging = ref(null);
+const firebaseConfig = {
+    apiKey: "AIzaSyAh17S_KmK43c9U85OudQpti_JQ8hdYJn4",
+    authDomain: "kaangiray26-messenger.firebaseapp.com",
+    projectId: "kaangiray26-messenger",
+    storageBucket: "kaangiray26-messenger.appspot.com",
+    messagingSenderId: "908221026498",
+    appId: "1:908221026498:web:0afd6e2859e0b20876ab5b"
+};
+const registrationToken = ref(null);
+
 
 async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
@@ -454,15 +470,6 @@ async function open_chat(item) {
     })
 }
 
-async function check_url_parameters() {
-    const url = new URL(window.location.href);
-    const add = url.searchParams.get('add');
-    if (add) {
-        add_contact(add);
-        return
-    }
-}
-
 async function stop_qr_scan() {
     scanning.value = false;
     video.value.srcObject.getTracks().forEach(track => track.stop());
@@ -646,7 +653,17 @@ async function handle_outgoing_connection(connection) {
 async function peer_first_setup() {
     // Create peer
     const totp = await generate_totp(secret.value);
-    peer.value = new Peer([totp]);
+    peer.value = new Peer([totp], {
+        config: {
+            iceServers: [
+                {
+                    urls: "turn:standard.relay.metered.ca:80",
+                    username: "90e794d7186335533be6a215",
+                    credential: "05ker3YuARTJkdfP",
+                },
+            ]
+        }
+    });
     peer.value.on('connection', (connection) => {
         handle_incoming_connection(connection);
     })
@@ -664,7 +681,17 @@ async function peer_first_setup() {
 async function peer_setup() {
     // Create peer
     const totp = await generate_totp(secret.value);
-    peer.value = new Peer([totp]);
+    peer.value = new Peer([totp], {
+        config: {
+            iceServers: [
+                {
+                    urls: "turn:standard.relay.metered.ca:80",
+                    username: "90e794d7186335533be6a215",
+                    credential: "05ker3YuARTJkdfP",
+                },
+            ]
+        }
+    });
     peer.value.on('connection', (connection) => {
         handle_incoming_connection(connection);
     })
@@ -717,6 +744,28 @@ async function create_notification(secret, body) {
     });
 }
 
+async function firebase_setup() {
+    const app = initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+
+    onMessage(messaging, (payload) => {
+        console.log('Message received. ', payload);
+    });
+
+    getToken(messaging, {
+        vapidKey: 'BG0DD2EqkenzHDkuO7e_oKGdWR6CMcRD5C4wTmjAK9Yj6Si2vbhLNESb30a7uQZ9dCsDR9hUrpW85E_n_BOlICw'
+    }).then((currentToken) => {
+        if (currentToken) {
+            console.log('Token:', currentToken);
+            registrationToken.value = currentToken;
+        } else {
+            console.log('No registration token available. Request permission to generate one.');
+        }
+    }).catch((err) => {
+        console.log('An error occurred while retrieving token. ', err);
+    });
+}
+
 onBeforeMount(async () => {
     // Generate one time secret if empty
     if (localStorage.getItem('secret') === null) {
@@ -730,6 +779,9 @@ onBeforeMount(async () => {
     if ("virtualKeyboard" in navigator) {
         navigator.virtualKeyboard.overlaysContent = true;
     }
+
+    // Configure firebase
+    firebase_setup();
 
     // Setup peer and check for url parameters
     peer_first_setup();

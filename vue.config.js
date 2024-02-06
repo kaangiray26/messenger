@@ -1,1 +1,1 @@
-module.exports = { publicPath: '/messenger/' }
+module.exports = { publicPath: '/' }

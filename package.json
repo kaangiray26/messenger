@@ -1,6 +1,6 @@
 {
-  "name": "template",
-  "version": "0.0.0",
+  "name": "messenger",
+  "version": "1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,6 +10,7 @@
   "dependencies": {
     "@popperjs/core": "^2.11.8",
     "bootstrap": "^5.3.2",
+    "firebase": "^10.7.2",
     "fuse.js": "^7.0.0",
     "jsqr": "^1.4.0",
     "peerjs": "^1.5.2",
