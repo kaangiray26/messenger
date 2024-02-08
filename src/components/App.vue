@@ -38,8 +38,6 @@
                                 <img src="/images/person.svg" class="avatar me-2">
                                 <div class="d-flex flex-column">
                                     <span class="name">{{ item.name }}</span>
-                                    <span v-show="conns[item.secret].unavailable"
-                                        class="nord-text-11 fw-bold">Unavailable</span>
                                 </div>
                             </div>
                             <div class="d-flex justify-content-end align-items-center">
@@ -78,7 +76,7 @@
                     </div>
                     <div class="textarea-container">
                         <textarea ref="textarea" v-model="message" class="form-control" placeholder="Message" rows="1"
-                            @keypress="handle_keys" @input="handle_input" @focus="open_keyboard"></textarea>
+                            @keypress="handle_keys" @input="handle_input" @focus="open_keyboard" autofocus></textarea>
                         <div class="send-button" @click="handle_send">
                             <span class="material-symbols-outlined">
                                 send
@@ -156,13 +154,17 @@ import { ref, onBeforeMount, nextTick } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
+import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { generateKey, readKey, encrypt, decrypt, createMessage, readMessage } from 'openpgp';
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
 import jsQR from "jsqr";
 
+// Secrets
 const countdown = ref(0);
 const secret = ref(null);
+const pubkey = ref(null);
+const privkey = ref(null);
 const name = ref(null);
 
 // states
@@ -185,9 +187,15 @@ const textarea = ref(null);
 // PeerJS
 const peer = ref(null);
 const conns = ref({});
-const trying = ref({
-    id: null
-})
+const peerConfig = {
+    iceServers: [
+        {
+            urls: "turn:standard.relay.metered.ca:80",
+            username: "90e794d7186335533be6a215",
+            credential: "05ker3YuARTJkdfP",
+        },
+    ]
+}
 
 // contacts
 const contact = ref(null);
@@ -196,6 +204,7 @@ const results = ref([]);
 
 // messages
 const messages = ref(null);
+const message_queue = ref([]);
 
 // qrcode
 const video = ref(null);
@@ -211,6 +220,8 @@ const fuse = ref(null);
 // firebase
 const app = ref(null);
 const messaging = ref(null);
+const server = "http://localhost:3000";
+const registration = ref(false);
 const firebaseConfig = {
     apiKey: "AIzaSyAh17S_KmK43c9U85OudQpti_JQ8hdYJn4",
     authDomain: "kaangiray26-messenger.firebaseapp.com",
@@ -219,8 +230,9 @@ const firebaseConfig = {
     messagingSenderId: "908221026498",
     appId: "1:908221026498:web:0afd6e2859e0b20876ab5b"
 };
-const registrationToken = ref(null);
 
+// database
+const db = ref(null);
 
 async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
@@ -266,9 +278,12 @@ async function handle_keys(event) {
 
         // Send message
         send_message({
-            type: 'message',
-            message: message.value
+            'message': message.value,
+            'contact': contact.value
         });
+
+        // Clear message
+        message.value = '';
     }
 }
 
@@ -280,9 +295,12 @@ async function handle_send() {
 
     // Send message
     send_message({
-        type: 'message',
-        message: message.value
+        'message': message.value,
+        'contact': contact.value
     });
+
+    // Clear message
+    message.value = '';
 }
 
 async function handle_input() {
@@ -344,7 +362,6 @@ async function delete_chat() {
 }
 
 async function open_keyboard() {
-    console.log("Opening keyboard...");
     if ("virtualKeyboard" in navigator) navigator.virtualKeyboard.show();
 }
 
@@ -357,17 +374,43 @@ async function logout() {
 }
 
 async function send_message(data) {
-    // Check if connection exists
-    if (conns.value[contact.value.secret].conn) {
-        const connection = conns.value[contact.value.secret];
-        connection.conn.send(data);
+    console.log('Sending message:', data);
+
+    // Create a unique identifier for the message
+    const uid = await generate_secret();
+
+    // Encrypt message
+    const encrypted = await encrypt({
+        message: await createMessage({ text: data.message }),
+        encryptionKeys: await readKey({ armoredKey: data.contact.pubkey }),
+    });
+
+    // Add message to the message queue
+    message_queue.value.push({
+        'uid': uid,
+        'message': data.message,
+        'contact': data.contact,
+        'encrypted': encrypted
+    });
+
+    // 1: Use the already present connection and send the message
+    if (conns.value[data.contact.secret].conn) {
+        const connection = conns.value[data.contact.secret];
+        connection.conn.send({
+            type: 'message',
+            message: encrypted
+        });
+
+        // Remove message from the queue
+        message_queue.value = message_queue.value.filter(item => item.uid != uid);
+
+        // Add message to the list
         connection.items.push({
             type: 'message',
             data: data.message,
             me: true,
             dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
         });
-        message.value = '';
         nextTick(() => {
             messages.value.scroll({
                 top: messages.value.scrollHeight,
@@ -377,26 +420,65 @@ async function send_message(data) {
         return
     }
 
-    // Create connection and send the message
-    const totp = await generate_totp(contact.value.secret);
+    // 2: Try to create a new connection and send the message
+    const totp = await generate_totp(data.contact.secret);
     const connection = peer.value.connect(totp, {
         reliable: true,
         metadata: {
             from: secret.value,
-            to: contact.value.secret,
+            to: data.contact.secret,
         }
     })
-    connection.on('open', () => {
-        handle_outgoing_connection(connection);
-        connection.send(data);
+    connection.on('open', async () => {
+        await handle_outgoing_connection(connection);
+        connection.send({
+            type: 'message',
+            message: encrypted
+        });
+
+        // Remove message from the queue
+        message_queue.value = message_queue.value.filter(item => item.uid != uid);
+
+        // Add message to the list
         conns.value[contact.value.secret].items.push({
             type: 'message',
             data: data.message,
             me: true,
             dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
         });
-        message.value = '';
+        nextTick(() => {
+            messages.value.scroll({
+                top: messages.value.scrollHeight,
+                behavior: 'smooth'
+            })
+        })
+        return
     })
+    connection.on('error', (error) => {
+        console.log('Sending message error:', error);
+    })
+}
+
+async function send_push_notification(msg) {
+    console.log("Trying to send message via firebase:", msg);
+
+    // Create a message
+    const payload = {
+        from: secret.value,
+        to: msg.contact.secret,
+        body: msg.encrypted,
+    }
+
+    // Send message
+    const response = await fetch('http://localhost:3000/send', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    }).then(res => res.text());
+
+    console.log("Firebase response:", response);
 }
 
 async function add_contact(item) {
@@ -417,7 +499,8 @@ async function add_contact(item) {
         connection.send({
             type: "handshake",
             name: name.value,
-            secret: secret.value
+            secret: secret.value,
+            pubkey: pubkey.value.armor()
         })
     })
 
@@ -426,12 +509,13 @@ async function add_contact(item) {
             conns.value[data.secret] = {
                 conn: null,
                 items: [],
-                unavailable: false,
                 notification: false,
+                pubkey: data.pubkey
             }
             contacts.value.push({
                 name: data.name,
-                secret: data.secret
+                secret: data.secret,
+                pubkey: data.pubkey
             });
             save_contacts();
 
@@ -447,27 +531,11 @@ async function refresh() {
 
 async function open_chat(item) {
     // Check if connection exists
-    if (conns.value.hasOwnProperty(item.secret) && conns.value[item.secret].conn) {
+    if (conns.value.hasOwnProperty(item.secret)) {
         conns.value[item.secret].notification = false;
         contact.value = item;
         return
     }
-
-    // Create connection
-    const totp = await generate_totp(item.secret);
-    trying.value.id = item.secret;
-    const connection = peer.value.connect(totp, {
-        reliable: true,
-        metadata: {
-            from: secret.value,
-            to: item.secret,
-        }
-    })
-    connection.on('open', () => {
-        handle_outgoing_connection(connection);
-        conns.value[item.secret].unable = false;
-        contact.value = item;
-    })
 }
 
 async function stop_qr_scan() {
@@ -540,7 +608,7 @@ function tick() {
 
 async function handle_incoming_connection(connection) {
     // Data handler
-    connection.on('data', (data) => {
+    connection.on('data', async (data) => {
         console.log('Incoming data:', data);
         // Handle handshake
         if (data.type == 'handshake') {
@@ -551,32 +619,40 @@ async function handle_incoming_connection(connection) {
             conns.value[data.secret] = {
                 conn: null,
                 items: [],
-                unavailable: false,
                 notification: false,
+                pubkey: data.pubkey
             }
             contacts.value.push({
                 name: data.name,
-                secret: data.secret
+                secret: data.secret,
+                pubkey: data.pubkey
             });
             save_contacts();
             connection.send({
                 type: 'handshake',
                 name: name.value,
-                secret: secret.value
+                secret: secret.value,
+                pubkey: pubkey.value.armor()
             })
             return
         }
 
         // Handle message
         if (data.type === 'message') {
+            // Decrypt message
+            const decrypted = await decrypt({
+                message: await readMessage({ armoredMessage: data.message }),
+                decryptionKeys: privkey.value
+            });
+
             // Set notification
             if (!contact.value || contact.value.secret != connection.metadata.from) {
                 conns.value[connection.metadata.from].notification = true;
-                create_notification(connection.metadata.from, data.message);
+                create_notification(connection.metadata.from, decrypted.data);
             }
             conns.value[connection.metadata.from].items.push({
                 type: 'message',
-                data: data.message,
+                data: decrypted.data,
                 me: false,
                 dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
             });
@@ -594,41 +670,30 @@ async function handle_incoming_connection(connection) {
     conns.value[connection.metadata.from] = {
         conn: connection,
         items: [],
-        unavailable: false,
         notification: false,
+        pubkey: null
     }
 }
 
 async function handle_outgoing_connection(connection) {
     // Add message to list
-    connection.on('data', (data) => {
+    connection.on('data', async (data) => {
         console.log('Outgoing data:', data);
-        // Handle shakehand
-        if (data.type === 'shakehand') {
-            if (contacts.value.includes(data.secret)) return;
-            conns.value[data.secret] = {
-                conn: null,
-                items: [],
-                unavailable: false,
-                notification: false,
-            }
-            contacts.value.push({
-                name: data.name,
-                secret: data.secret
-            });
-            save_contacts();
-            return
-        }
-
         // Handle message
         if (data.type === 'message') {
+            // Decrypt message
+            const decrypted = await decrypt({
+                message: await readMessage({ armoredMessage: data.message }),
+                decryptionKeys: privkey.value
+            });
+
             if (!contact.value || contact.value.secret != connection.metadata.to) {
                 conns.value[connection.metadata.to].notification = true;
-                create_notification(connection.metadata.to, data.message);
+                create_notification(connection.metadata.to, decrypted.data);
             }
             conns.value[connection.metadata.to].items.push({
                 type: 'message',
-                data: data.message,
+                data: decrypted.data,
                 me: false,
                 dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
             });
@@ -641,67 +706,48 @@ async function handle_outgoing_connection(connection) {
         conns.value[connection.metadata.to].conn = null;
     })
 
+    // Error handler
+    connection.on('error', () => {
+        console.log('Connection error:', connection.metadata.to);
+    })
+
     // Add connection to list
     conns.value[connection.metadata.to] = {
         conn: connection,
         items: [],
-        unavailable: false,
         notification: false,
+        pubkey: null
     }
 }
 
-async function peer_first_setup() {
+async function peer_setup() {
+    // Destroy old peer
+    if (peer.value) peer.value.destroy();
+
     // Create peer
     const totp = await generate_totp(secret.value);
     peer.value = new Peer([totp], {
-        config: {
-            iceServers: [
-                {
-                    urls: "turn:standard.relay.metered.ca:80",
-                    username: "90e794d7186335533be6a215",
-                    credential: "05ker3YuARTJkdfP",
-                },
-            ]
-        }
+        config: peerConfig
     });
     peer.value.on('connection', (connection) => {
         handle_incoming_connection(connection);
     })
     peer.value.on('open', () => {
         ready.value = true;
-    });
-    peer.value.on('error', (error) => {
-        if (error.type == 'peer-unavailable' && trying.value.id) {
-            console.log('Peer unavailable:', trying.value.id);
-            conns.value[trying.value.id].unavailable = true;
-        }
-    })
-}
-
-async function peer_setup() {
-    // Create peer
-    const totp = await generate_totp(secret.value);
-    peer.value = new Peer([totp], {
-        config: {
-            iceServers: [
-                {
-                    urls: "turn:standard.relay.metered.ca:80",
-                    username: "90e794d7186335533be6a215",
-                    credential: "05ker3YuARTJkdfP",
-                },
-            ]
-        }
-    });
-    peer.value.on('connection', (connection) => {
-        handle_incoming_connection(connection);
-    })
-    peer.value.on('open', () => {
         console.log('New Peer created:', peer.value.id);
     })
     peer.value.on('error', (error) => {
-        if (error.type == 'peer-unavailable' && trying.value.id) {
-            console.log('Peer unavailable:', trying.value.id);
-            conns.value[trying.value.id].unavailable = true;
+        console.log(Date.now(), 'Peer error:', error.type);
+
+        if (error.type == "peer-unavailable") {
+            const msg = message_queue.value[0];
+            console.log("Message to send:", msg);
+
+            // Try to send via firebase
+            send_push_notification(msg);
+
+            // Remove message from the queue
+            message_queue.value = message_queue.value.filter(item => item.uid != msg.uid);
         }
     })
 }
@@ -710,6 +756,38 @@ async function save_contacts() {
     localStorage.setItem('contacts', JSON.stringify(contacts.value));
     results.value = contacts.value;
     fuse.value.setCollection(contacts.value);
+}
+
+async function load_database() {
+    // IndexedDB
+    const request = indexedDB.open('messenger', 3);
+
+    request.onerror = (event) => {
+        console.log('Database error:', event.target.errorCode);
+    }
+
+    request.onsuccess = (event) => {
+        console.log('Database opened:', event.target.result);
+        db.value = event.target.result;
+    }
+
+    request.onupgradeneeded = (event) => {
+        console.log('Database upgrade:', event.target.result);
+        db.value = event.target.result;
+
+        // Create messages object store
+        const messages = db.value.createObjectStore('messages', { keyPath: 'secret' });
+        contacts.createIndex('secret', 'secret', { unique: true });
+        messages.transaction.oncomplete = (event) => {
+            console.log('Database transaction complete:', event);
+        }
+
+        // Create store for keys
+        const keys = db.value.createObjectStore('keys', { keyPath: 'type' });
+        keys.transaction.oncomplete = (event) => {
+            console.log('Database transaction complete:', event);
+        }
+    }
 }
 
 async function load_contacts() {
@@ -722,8 +800,8 @@ async function load_contacts() {
         conns.value[item.secret] = {
             conn: null,
             items: [],
-            unavailable: false,
             notification: false,
+            pubkey: null
         }
     })
 }
@@ -735,7 +813,7 @@ async function create_notification(secret, body) {
             navigator.serviceWorker.ready.then((registration) => {
                 registration.showNotification(name, {
                     body: body,
-                    icon: "/messenger/images/512x512.png",
+                    icon: "/images/512x512.png",
                     vibrate: [200, 100, 200, 100, 200, 100, 200],
                     tag: "vibration-sample",
                 });
@@ -752,47 +830,117 @@ async function firebase_setup() {
         console.log('Message received. ', payload);
     });
 
-    getToken(messaging, {
+    // Push notification registration
+    if (!registration.value) return;
+
+    const token = await getToken(messaging, {
         vapidKey: 'BG0DD2EqkenzHDkuO7e_oKGdWR6CMcRD5C4wTmjAK9Yj6Si2vbhLNESb30a7uQZ9dCsDR9hUrpW85E_n_BOlICw'
-    }).then((currentToken) => {
-        if (currentToken) {
-            console.log('Token:', currentToken);
-            registrationToken.value = currentToken;
-        } else {
-            console.log('No registration token available. Request permission to generate one.');
-        }
-    }).catch((err) => {
-        console.log('An error occurred while retrieving token. ', err);
     });
+
+    if (!token) {
+        console.log('No registration token available. Request permission to generate one.');
+        return;
+    }
+
+    // Register to device group
+    const response = await fetch(server + '/register', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            token: token,
+            secret: secret.value
+        })
+    }).then(response => response.text());
+    console.log('Registration response:', response);
+}
+
+async function read_keys() {
+    //
+}
+
+async function create_keys() {
+    // Create peer secret
+    const secretKey = await generate_secret();
+
+    // Create public and private keys
+    const { privateKey, publicKey, revocationCertificate } = await generateKey({
+        type: 'ecc',
+        curve: 'curve25519',
+        userIDs: [{ name: secretKey }],
+        format: 'armored'
+    })
+
+    // Save keys to indexedDB
+    const transaction = db.value.transaction(['keys'], 'readwrite');
+    const objectStore = transaction.objectStore('keys');
+
+    const items = [
+        {
+            type: "secret",
+            key: secretKey
+        },
+        {
+            type: "private",
+            key: privateKey
+        },
+        {
+            type: "public",
+            key: publicKey
+        }
+    ]
+    items.map(item => objectStore.add(item));
+    localStorage.setItem('init', true);
+
+    // Set registration to true
+    registration.value = true;
 }
 
 onBeforeMount(async () => {
-    // Generate one time secret if empty
-    if (localStorage.getItem('secret') === null) {
-        localStorage.setItem('secret', await generate_secret());
+    // Set device mode
+    if (window.innerWidth > 768) {
+        desktop.value = true;
     }
-    secret.value = localStorage.getItem('secret');
-    name.value = localStorage.getItem('name') || secret.value;
-    console.log('Secret:', secret.value);
 
     // Configure the virtual keyboard
     if ("virtualKeyboard" in navigator) {
         navigator.virtualKeyboard.overlaysContent = true;
     }
 
-    // Configure firebase
-    firebase_setup();
+    // Load database
+    await load_database();
 
-    // Setup peer and check for url parameters
-    peer_first_setup();
+    // Generate one time secret if empty
+    if (localStorage.getItem('init') === null) await create_keys();
+
+    // Set values
+    await read_keys();
+
+    secret.value = localStorage.getItem('secret');
+    pubkey.value = await readKey({ armoredKey: localStorage.getItem('public') });
+    privkey.value = await readKey({ armoredKey: localStorage.getItem('private') });
+    name.value = localStorage.getItem('name') || secret.value;
 
     // Load contacts
     load_contacts();
 
-    // Set device mode
-    if (window.innerWidth > 768) {
-        desktop.value = true;
-    }
+    // Create fuzzy search
+    fuse.value = new Fuse(contacts.value, {
+        keys: ['name', 'secret'],
+        threshold: 0.3,
+    })
+
+    // Configure firebase
+    firebase_setup();
+
+    // Setup peer
+    peer_setup();
+
+    // Loop every second
+    setInterval(() => {
+        get_countdown();
+    }, 1000);
 
     // Create qr code
     qrcode_data.value = secret.value;
@@ -809,19 +957,5 @@ onBeforeMount(async () => {
     }).then(url => {
         qrcode.value = url;
     })
-
-    // Create fuzzy search
-    fuse.value = new Fuse(contacts.value, {
-        keys: ['name', 'secret'],
-        threshold: 0.3,
-    })
-
-    // Generate TOTP
-    get_countdown();
-
-    // Loop every second
-    setInterval(() => {
-        get_countdown();
-    }, 1000);
 })
 </script>
