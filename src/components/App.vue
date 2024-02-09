@@ -169,7 +169,7 @@ const privkey = ref(null);
 const name = ref(null);
 
 // states
-const ready = ref(false);
+const ready = ref(true);
 const desktop = ref(false);
 const adding = ref(false);
 const changing = ref(false);
@@ -409,23 +409,30 @@ async function send_message(data) {
     });
 
     // Message object
+    const time = new Date();
     const msg = {
         secret: data.contact.secret,
         data: data.message,
         me: true,
-        dt: new Date().toLocaleTimeString('en-GB', {
+        dt: time.toLocaleTimeString('en-GB', {
             hour: 'numeric', minute: 'numeric'
         }),
-        timestamp: Date.now()
+        timestamp: +time
     }
 
-    // Add message to the message queue
-    message_queue.value.push({
-        'uid': uid,
-        'message': data.message,
-        'contact': data.contact,
-        'encrypted': encrypted
-    });
+    // Add to database
+    const tx = db.value.transaction('messages', 'readwrite');
+    await tx.store.put(msg);
+
+    // Add to chat
+    conns.value[data.contact.secret].items.push(msg);
+
+    nextTick(() => {
+        messages.value.scroll({
+            top: messages.value.scrollHeight,
+            behavior: 'smooth'
+        })
+    })
 
     // 1: Use the already present connection and send the message
     if (conns.value[data.contact.secret].conn) {
@@ -434,20 +441,6 @@ async function send_message(data) {
             type: 'message',
             message: encrypted
         });
-
-        // Remove message from the queue
-        message_queue.value = message_queue.value.filter(item => item.uid != uid);
-
-        // Add to database
-        const tx = db.value.transaction('messages', 'readwrite');
-        await tx.store.put(msg);
-        connection.items.push(msg);
-        nextTick(() => {
-            messages.value.scroll({
-                top: messages.value.scrollHeight,
-                behavior: 'smooth'
-            })
-        })
         return
     }
 
@@ -458,6 +451,7 @@ async function send_message(data) {
         metadata: {
             from: secret.value,
             to: data.contact.secret,
+            body: encrypted
         }
     })
     connection.on('open', async () => {
@@ -466,20 +460,6 @@ async function send_message(data) {
             type: 'message',
             message: encrypted
         });
-
-        // Remove message from the queue
-        message_queue.value = message_queue.value.filter(item => item.uid != uid);
-
-        // Add to database
-        const tx = db.value.transaction('messages', 'readwrite');
-        await tx.store.put(msg);
-        conns.value[contact.value.secret].items.push(msg);
-        nextTick(() => {
-            messages.value.scroll({
-                top: messages.value.scrollHeight,
-                behavior: 'smooth'
-            })
-        })
         return
     })
     connection.on('error', (error) => {
@@ -492,9 +472,9 @@ async function send_push_notification(msg) {
 
     // Create a message
     const payload = {
-        from: secret.value,
-        to: msg.contact.secret,
-        body: msg.encrypted,
+        from: msg.from,
+        to: msg.to,
+        body: msg.body,
     }
 
     // Send message
@@ -570,6 +550,9 @@ async function open_chat(item) {
     // Load contact
     conns.value[item.secret].notification = false;
     contact.value = item;
+    nextTick(() => {
+        textarea.value.focus();
+    })
 
     // Load messages
     const tx = db.value.transaction('messages', 'readonly');
@@ -699,16 +682,19 @@ async function handle_incoming_connection(connection) {
                 conns.value[connection.metadata.from].notification = true;
                 create_notification(connection.metadata.from, decrypted.data);
             }
+
             // Message object
+            const time = new Date();
             const msg = {
                 secret: connection.metadata.from,
                 data: decrypted.data,
                 me: false,
-                dt: new Date().toLocaleTimeString('en-GB', {
+                dt: time.toLocaleTimeString('en-GB', {
                     hour: 'numeric', minute: 'numeric'
                 }),
-                timestamp: Date.now()
+                timestamp: +time
             }
+
             // Add to database
             const tx = db.value.transaction('messages', 'readwrite');
             await tx.store.put(msg);
@@ -724,7 +710,16 @@ async function handle_incoming_connection(connection) {
     })
 
     // Add connection to list
-    conns.value[connection.metadata.from].conn = connection;
+    if (conns.value[connection.metadata.from]) {
+        conns.value[connection.metadata.from].conn = connection;
+        return
+    }
+    conns.value[connection.metadata.from] = {
+        conn: connection,
+        items: [],
+        notification: false,
+        pubkey: null
+    }
 }
 
 async function handle_outgoing_connection(connection) {
@@ -746,14 +741,15 @@ async function handle_outgoing_connection(connection) {
             }
 
             // Message object
+            const time = new Date();
             const msg = {
                 secret: connection.metadata.to,
                 data: decrypted.data,
                 me: false,
-                dt: new Date().toLocaleTimeString('en-GB', {
+                dt: time.toLocaleTimeString('en-GB', {
                     hour: 'numeric', minute: 'numeric'
                 }),
-                timestamp: Date.now()
+                timestamp: +time
             }
 
             // Add to database
@@ -791,21 +787,16 @@ async function peer_setup() {
         handle_incoming_connection(connection);
     })
     peer.value.on('open', () => {
-        ready.value = true;
+        // ready.value = true;
         console.log('New Peer created:', peer.value.id);
     })
     peer.value.on('error', (error) => {
-        console.log(Date.now(), 'Peer error:', error.type);
-
         if (error.type == "peer-unavailable") {
-            const msg = message_queue.value[0];
-            console.log("Message to send:", msg);
+            const connection_id = error.message.split(' ').pop();
+            const msg = peer.value.connections[connection_id][0].metadata;
 
             // Try to send via firebase
             send_push_notification(msg);
-
-            // Remove message from the queue
-            message_queue.value = message_queue.value.filter(item => item.uid != msg.uid);
         }
     })
 }

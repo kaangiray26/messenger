@@ -5,6 +5,7 @@ importScripts('https://unpkg.com/openpgp@5.11.0/dist/openpgp.min.js');
 importScripts('https://cdn.jsdelivr.net/npm/idb@8.0.0/build/umd.js');
 
 // Private key
+var db = null;
 var privkey = null;
 
 // Initialize the Firebase app
@@ -19,16 +20,19 @@ firebase.initializeApp({
 
 // Get the private key from indexedDB
 async function setup() {
-    const db = await idb.openDB('messenger', 1);
+    db = await idb.openDB('messenger', 1);
     const key = await db.get('keys', 'private');
     privkey = await openpgp.readPrivateKey({ armoredKey: key });
-    console.log('Private key retrieved:', privkey);
-    console.log('Service Worker Registered');
 }
 
 async function handle_message(payload) {
     const title = payload.notification.title;
     const body = payload.notification.body;
+
+    // Check if private key is available
+    if (!privkey) {
+        await setup();
+    }
 
     console.log('Decrypting message:', body, "with private key:", privkey);
 
@@ -37,6 +41,22 @@ async function handle_message(payload) {
         message: await openpgp.readMessage({ armoredMessage: body }),
         decryptionKeys: privkey
     });
+
+    // Message object
+    const time = new Date();
+    const msg = {
+        secret: title,
+        data: decrypted.data,
+        me: false,
+        dt: time.toLocaleTimeString('en-GB', {
+            hour: 'numeric', minute: 'numeric'
+        }),
+        timestamp: +time
+    }
+
+    // Add to database
+    const tx = db.transaction('messages', 'readwrite');
+    await tx.store.put(msg);
 
     // Customize notification here
     const notificationTitle = title;
@@ -61,4 +81,4 @@ self.addEventListener('notificationclick', function (event) {
     );
 });
 
-setup();
+console.log('Service Worker Registered');
