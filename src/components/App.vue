@@ -408,6 +408,17 @@ async function send_message(data) {
         encryptionKeys: await readKey({ armoredKey: data.contact.pubkey }),
     });
 
+    // Message object
+    const msg = {
+        secret: data.contact.secret,
+        data: data.message,
+        me: true,
+        dt: new Date().toLocaleTimeString('en-GB', {
+            hour: 'numeric', minute: 'numeric'
+        }),
+        timestamp: Date.now()
+    }
+
     // Add message to the message queue
     message_queue.value.push({
         'uid': uid,
@@ -427,13 +438,10 @@ async function send_message(data) {
         // Remove message from the queue
         message_queue.value = message_queue.value.filter(item => item.uid != uid);
 
-        // Add message to the list
-        connection.items.push({
-            type: 'message',
-            data: data.message,
-            me: true,
-            dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
-        });
+        // Add to database
+        const tx = db.value.transaction('messages', 'readwrite');
+        await tx.store.put(msg);
+        connection.items.push(msg);
         nextTick(() => {
             messages.value.scroll({
                 top: messages.value.scrollHeight,
@@ -462,13 +470,10 @@ async function send_message(data) {
         // Remove message from the queue
         message_queue.value = message_queue.value.filter(item => item.uid != uid);
 
-        // Add message to the list
-        conns.value[contact.value.secret].items.push({
-            type: 'message',
-            data: data.message,
-            me: true,
-            dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
-        });
+        // Add to database
+        const tx = db.value.transaction('messages', 'readwrite');
+        await tx.store.put(msg);
+        conns.value[contact.value.secret].items.push(msg);
         nextTick(() => {
             messages.value.scroll({
                 top: messages.value.scrollHeight,
@@ -562,12 +567,15 @@ async function refresh() {
 }
 
 async function open_chat(item) {
-    // Check if connection exists
-    if (conns.value.hasOwnProperty(item.secret)) {
-        conns.value[item.secret].notification = false;
-        contact.value = item;
-        return
-    }
+    // Load contact
+    conns.value[item.secret].notification = false;
+    contact.value = item;
+
+    // Load messages
+    const tx = db.value.transaction('messages', 'readonly');
+    const messages = await tx.store.index('secret').getAll(item.secret);
+    console.log('Messages:', messages);
+    conns.value[item.secret].items = messages;
 }
 
 async function stop_qr_scan() {
@@ -691,12 +699,20 @@ async function handle_incoming_connection(connection) {
                 conns.value[connection.metadata.from].notification = true;
                 create_notification(connection.metadata.from, decrypted.data);
             }
-            conns.value[connection.metadata.from].items.push({
-                type: 'message',
+            // Message object
+            const msg = {
+                secret: connection.metadata.from,
                 data: decrypted.data,
                 me: false,
-                dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
-            });
+                dt: new Date().toLocaleTimeString('en-GB', {
+                    hour: 'numeric', minute: 'numeric'
+                }),
+                timestamp: Date.now()
+            }
+            // Add to database
+            const tx = db.value.transaction('messages', 'readwrite');
+            await tx.store.put(msg);
+            conns.value[connection.metadata.from].items.push(msg);
             return
         }
     });
@@ -708,12 +724,7 @@ async function handle_incoming_connection(connection) {
     })
 
     // Add connection to list
-    conns.value[connection.metadata.from] = {
-        conn: connection,
-        items: [],
-        notification: false,
-        pubkey: null
-    }
+    conns.value[connection.metadata.from].conn = connection;
 }
 
 async function handle_outgoing_connection(connection) {
@@ -728,16 +739,27 @@ async function handle_outgoing_connection(connection) {
                 decryptionKeys: privkey.value
             });
 
+            // Set notification
             if (!contact.value || contact.value.secret != connection.metadata.to) {
                 conns.value[connection.metadata.to].notification = true;
                 create_notification(connection.metadata.to, decrypted.data);
             }
-            conns.value[connection.metadata.to].items.push({
-                type: 'message',
+
+            // Message object
+            const msg = {
+                secret: connection.metadata.to,
                 data: decrypted.data,
                 me: false,
-                dt: new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: 'numeric' })
-            });
+                dt: new Date().toLocaleTimeString('en-GB', {
+                    hour: 'numeric', minute: 'numeric'
+                }),
+                timestamp: Date.now()
+            }
+
+            // Add to database
+            const tx = db.value.transaction('messages', 'readwrite');
+            await tx.store.put(msg);
+            conns.value[connection.metadata.to].items.push(msg);
         }
     });
 
@@ -753,12 +775,7 @@ async function handle_outgoing_connection(connection) {
     })
 
     // Add connection to list
-    conns.value[connection.metadata.to] = {
-        conn: connection,
-        items: [],
-        notification: false,
-        pubkey: null
-    }
+    conns.value[connection.metadata.to].conn = connection;
 }
 
 async function peer_setup() {
@@ -797,11 +814,22 @@ async function load_database() {
     // IndexedDB
     db.value = await openDB('messenger', 1, {
         upgrade(db) {
+            // Keys
             db.createObjectStore('keys');
-            db.createObjectStore('messages');
-            db.createObjectStore('contacts', {
+
+            // Messages
+            const message_store = db.createObjectStore('messages', {
+                keyPath: 'message_id',
+                autoIncrement: true
+            })
+            message_store.createIndex('secret', 'secret', { unique: false });
+            message_store.createIndex('timestamp', 'timestamp', { unique: false });
+
+            // Contacts
+            const contact_store = db.createObjectStore('contacts', {
                 keyPath: 'secret'
-            }).createIndex('secret', 'secret', { unique: true });
+            })
+            contact_store.createIndex('secret', 'secret', { unique: true });
         }
     })
 
