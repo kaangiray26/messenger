@@ -844,9 +844,11 @@ async function load_database() {
 }
 
 async function create_notification(secret, body) {
+    console.log('Creating notification:', secret, body);
     const name = contacts.value.find(item => item.secret == secret).name;
-    Notification.requestPermission().then((result) => {
+    Notification.requestPermission().then(async (result) => {
         if (result === "granted") {
+            console.log(await navigator.serviceWorker.ready);
             navigator.serviceWorker.ready.then((registration) => {
                 registration.showNotification(name, {
                     body: body,
