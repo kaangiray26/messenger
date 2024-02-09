@@ -221,7 +221,7 @@ const fuse = ref(null);
 // firebase
 const app = ref(null);
 const messaging = ref(null);
-const server = "http://localhost:3000";
+const server = "https://home.buzl.uk";
 const registration = ref(false);
 const firebaseConfig = {
     apiKey: "AIzaSyAh17S_KmK43c9U85OudQpti_JQ8hdYJn4",
