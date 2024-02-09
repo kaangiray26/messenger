@@ -76,7 +76,7 @@
                     </div>
                     <div class="textarea-container">
                         <textarea ref="textarea" v-model="message" class="form-control" placeholder="Message" rows="1"
-                            @keypress="handle_keys" @input="handle_input" @focus="open_keyboard" autofocus></textarea>
+                            @keypress="handle_keys" @input="handle_input" @focus="open_keyboard"></textarea>
                         <div class="send-button" @click="handle_send">
                             <span class="material-symbols-outlined">
                                 send
@@ -552,15 +552,19 @@ async function open_chat(item) {
     // Load contact
     conns.value[item.secret].notification = false;
     contact.value = item;
-    nextTick(() => {
-        textarea.value.focus();
-    })
 
     // Load messages
     const tx = db.value.transaction('messages', 'readonly');
-    const messages = await tx.store.index('secret').getAll(item.secret);
-    console.log('Messages:', messages);
-    conns.value[item.secret].items = messages;
+    const msgs = await tx.store.index('secret').getAll(item.secret);
+    console.log('Messages:', msgs);
+    conns.value[item.secret].items = msgs;
+
+    nextTick(() => {
+        messages.value.scroll({
+            top: messages.value.scrollHeight,
+            behavior: 'smooth'
+        })
+    })
 }
 
 async function stop_qr_scan() {
