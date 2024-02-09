@@ -210,7 +210,6 @@ const results = ref([]);
 
 // messages
 const messages = ref(null);
-const message_queue = ref([]);
 
 // qrcode
 const video = ref(null);
@@ -224,8 +223,6 @@ const qr_visible = ref(false);
 const fuse = ref(null);
 
 // firebase
-const app = ref(null);
-const messaging = ref(null);
 const server = "https://home.buzl.uk";
 const registration = ref(false);
 const firebaseConfig = {
@@ -848,11 +845,17 @@ async function load_database() {
 
 async function create_notification(secret, body) {
     const name = contacts.value.find(item => item.secret == secret).name;
-
-    // Show notification
-    const notification = new Notification(name, {
-        body: body,
-        icon: '/images/person.svg'
+    Notification.requestPermission().then((result) => {
+        if (result === "granted") {
+            navigator.serviceWorker.ready.then((registration) => {
+                registration.showNotification(name, {
+                    body: body,
+                    icon: "/images/person.svg",
+                    vibrate: [200, 100, 200, 100, 200, 100, 200],
+                    tag: "vibration-sample",
+                });
+            });
+        }
     });
 }
 
