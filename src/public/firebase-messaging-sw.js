@@ -2,6 +2,10 @@
 importScripts('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js');
 importScripts('https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js');
 importScripts('https://unpkg.com/openpgp@5.11.0/dist/openpgp.min.js');
+importScripts('https://cdn.jsdelivr.net/npm/idb@8.0.0/build/umd.js');
+
+// Private key
+var privkey = null;
 
 // Initialize the Firebase app
 firebase.initializeApp({
@@ -14,25 +18,47 @@ firebase.initializeApp({
 });
 
 // Get the private key from indexedDB
+async function setup() {
+    const db = await idb.openDB('messenger', 1);
+    const key = await db.get('keys', 'private');
+    privkey = await openpgp.readPrivateKey({ armoredKey: key });
+    console.log('Private key retrieved:', privkey);
+    console.log('Service Worker Registered');
+}
 
-// Create an instance of the Firebase messaging service
-const messaging = firebase.messaging();
-messaging.onBackgroundMessage((payload) => {
+async function handle_message(payload) {
     const title = payload.notification.title;
     const body = payload.notification.body;
+
+    console.log('Decrypting message:', body, "with private key:", privkey);
+
+    // Decrypt message
+    const decrypted = await openpgp.decrypt({
+        message: await openpgp.readMessage({ armoredMessage: body }),
+        decryptionKeys: privkey
+    });
 
     // Customize notification here
     const notificationTitle = title;
     const notificationOptions = {
-        body: body,
-        icon: '/favicon.svg'
+        body: decrypted.data,
+        icon: '/images/person.svg'
     };
 
     self.registration.showNotification(notificationTitle, notificationOptions);
+}
+
+// Create an instance of the Firebase messaging service
+const messaging = firebase.messaging();
+messaging.onBackgroundMessage(handle_message);
+
+// Event handler for notification click
+self.addEventListener('notificationclick', function (event) {
+    console.log('Notification clicked');
+    event.notification.close();
+    event.waitUntil(
+        clients.openWindow('https://messenger.buzl.uk')
+    );
 });
 
-// Decrypt message using our private key
-// async function decrypt(msg) {
-// }
-
-console.log('Service Worker Registered');
+setup();

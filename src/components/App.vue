@@ -13,7 +13,7 @@
                     <div class="d-flex px-3 mb-3">
                         <div class="dropdown">
                             <span class="material-symbols-outlined dropdown-toggle" role="button" data-bs-toggle="dropdown"
-                                aria-expanded="false">
+                                aria-expanded="false" @click="requestPermission">
                                 more_horiz
                             </span>
                             <ul class="dropdown-menu">
@@ -323,6 +323,13 @@ async function get_results() {
     results.value = fuse.value.search(query.value).map(item => item.item);
 }
 
+async function requestPermission() {
+    if (Notification.permission === 'granted') return;
+    Notification.requestPermission().then((result) => {
+        window.location.href = window.location.origin + window.location.pathname;
+    });
+}
+
 async function add_code() {
     if (!code_input.value.value.length) return;
     add_contact(code_input.value.value);
@@ -343,7 +350,14 @@ async function change_name() {
     // Find the right contact in the array and change it
     const index = contacts.value.findIndex(item => item.secret == contact.value.secret);
     contacts.value[index].name = name_input.value.value;
-    save_contacts();
+
+    // Update the database
+    const tx = db.value.transaction('contacts', 'readwrite');
+    await tx.store.put({
+        name: name_input.value.value,
+        secret: contact.value.secret,
+        pubkey: contact.value.pubkey
+    });
 
     // Close the modal
     changing.value = false;
@@ -353,7 +367,10 @@ async function delete_chat() {
     // Remove contact from array
     const index = contacts.value.findIndex(item => item.secret == contact.value.secret);
     contacts.value.splice(index, 1);
-    save_contacts();
+
+    // Update the database
+    const tx = db.value.transaction('contacts', 'readwrite');
+    await tx.store.delete(contact.value.secret);
 
     // Remove connection from array
     delete conns.value[contact.value.secret];
@@ -372,11 +389,8 @@ async function logout() {
     localStorage.clear();
 
     // Clear indexedDB
-    await deleteDB('messenger', {
-        blocked() {
-            db.value.close();
-        }
-    });
+    await db.value.close();
+    await deleteDB('messenger');
 
     // Reload page
     window.location.href = window.location.origin + window.location.pathname;
@@ -809,23 +823,17 @@ async function load_database() {
 }
 
 async function create_notification(secret, body) {
-    console.log('Creating notification:', secret, body);
     const name = contacts.value.find(item => item.secret == secret).name;
-    Notification.requestPermission().then((result) => {
-        if (result === "granted") {
-            navigator.serviceWorker.ready.then((registration) => {
-                registration.showNotification(name, {
-                    body: body,
-                    icon: "/images/512x512.png",
-                    vibrate: [200, 100, 200, 100, 200, 100, 200],
-                    tag: "vibration-sample",
-                });
-            });
-        }
+
+    // Show notification
+    const notification = new Notification(name, {
+        body: body,
+        icon: '/images/person.svg'
     });
 }
 
 async function firebase_setup() {
+    console.log("Firebase setup...");
     const app = initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
 
@@ -834,8 +842,9 @@ async function firebase_setup() {
     });
 
     // Push notification registration
-    if (!registration.value) return;
+    if (localStorage.getItem('push')) return;
 
+    console.log('Registering for push notifications...');
     const token = await getToken(messaging, {
         vapidKey: 'BG0DD2EqkenzHDkuO7e_oKGdWR6CMcRD5C4wTmjAK9Yj6Si2vbhLNESb30a7uQZ9dCsDR9hUrpW85E_n_BOlICw'
     });
@@ -855,8 +864,13 @@ async function firebase_setup() {
             token: token,
             secret: secret.value
         })
-    }).then(response => response.text());
-    console.log('Registration response:', response);
+    });
+
+    // Set registration to true if successful
+    if (response.status === 200) {
+        console.log('Successfully registered for push notifications.');
+        localStorage.setItem('push', true);
+    }
 }
 
 async function read_keys() {
