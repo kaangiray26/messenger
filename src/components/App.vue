@@ -984,6 +984,11 @@ onBeforeMount(async () => {
         navigator.virtualKeyboard.overlaysContent = true;
     }
 
+    // Back button handler
+    window.onpopstate = () => {
+        if (contact.value) contact.value = null;
+    }
+
     // Load database
     await load_database();
 
