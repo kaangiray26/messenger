@@ -156,6 +156,7 @@ import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { generateKey, readKey, encrypt, decrypt, createMessage, readMessage } from 'openpgp';
+import { openDB, deleteDB, wrap, unwrap } from 'idb';
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
 import jsQR from "jsqr";
@@ -334,7 +335,7 @@ async function change_name() {
     // If no contact is set change own name
     if (!contact.value) {
         name.value = name_input.value.value;
-        localStorage.setItem('name', name.value);
+        await db.value.put('keys', name.value, 'name');
         changing.value = false;
         return
     }
@@ -366,8 +367,16 @@ async function open_keyboard() {
 }
 
 async function logout() {
+    console.log('Logging out...');
     // Clear localStorage
     localStorage.clear();
+
+    // Clear indexedDB
+    await deleteDB('messenger', {
+        blocked() {
+            db.value.close();
+        }
+    });
 
     // Reload page
     window.location.href = window.location.origin + window.location.pathname;
@@ -483,7 +492,8 @@ async function send_push_notification(msg) {
 
 async function add_contact(item) {
     // Check if contact already exists
-    const found = contacts.value.filter(ct => ct.secret == item).length;
+    // Check for contact in database
+    const found = await db.value.getFromIndex('contacts', 'secret', item);
     if (found) return;
 
     const totp = await generate_totp(item);
@@ -504,7 +514,7 @@ async function add_contact(item) {
         })
     })
 
-    connection.on('data', (data) => {
+    connection.on('data', async (data) => {
         if (data.type == "handshake") {
             conns.value[data.secret] = {
                 conn: null,
@@ -517,8 +527,16 @@ async function add_contact(item) {
                 secret: data.secret,
                 pubkey: data.pubkey
             });
-            save_contacts();
-
+            // Add to indexeddb contacts
+            const tx = db.value.transaction('contacts', 'readwrite');
+            await tx.store.put({
+                name: data.name,
+                secret: data.secret,
+                pubkey: data.pubkey
+            });
+            // Set up results
+            results.value = contacts.value;
+            fuse.value.setCollection(contacts.value);
             // Close connection
             connection.close();
         }
@@ -627,7 +645,16 @@ async function handle_incoming_connection(connection) {
                 secret: data.secret,
                 pubkey: data.pubkey
             });
-            save_contacts();
+            // Add to indexeddb contacts
+            const tx = db.value.transaction('contacts', 'readwrite');
+            await tx.store.put({
+                name: data.name,
+                secret: data.secret,
+                pubkey: data.pubkey
+            });
+            // Set up results
+            results.value = contacts.value;
+            fuse.value.setCollection(contacts.value);
             connection.send({
                 type: 'handshake',
                 name: name.value,
@@ -752,48 +779,23 @@ async function peer_setup() {
     })
 }
 
-async function save_contacts() {
-    localStorage.setItem('contacts', JSON.stringify(contacts.value));
-    results.value = contacts.value;
-    fuse.value.setCollection(contacts.value);
-}
-
 async function load_database() {
     // IndexedDB
-    const request = indexedDB.open('messenger', 3);
-
-    request.onerror = (event) => {
-        console.log('Database error:', event.target.errorCode);
-    }
-
-    request.onsuccess = (event) => {
-        console.log('Database opened:', event.target.result);
-        db.value = event.target.result;
-    }
-
-    request.onupgradeneeded = (event) => {
-        console.log('Database upgrade:', event.target.result);
-        db.value = event.target.result;
-
-        // Create messages object store
-        const messages = db.value.createObjectStore('messages', { keyPath: 'secret' });
-        contacts.createIndex('secret', 'secret', { unique: true });
-        messages.transaction.oncomplete = (event) => {
-            console.log('Database transaction complete:', event);
+    db.value = await openDB('messenger', 1, {
+        upgrade(db) {
+            db.createObjectStore('keys');
+            db.createObjectStore('messages');
+            db.createObjectStore('contacts', {
+                keyPath: 'secret'
+            }).createIndex('secret', 'secret', { unique: true });
         }
+    })
 
-        // Create store for keys
-        const keys = db.value.createObjectStore('keys', { keyPath: 'type' });
-        keys.transaction.oncomplete = (event) => {
-            console.log('Database transaction complete:', event);
-        }
-    }
-}
-
-async function load_contacts() {
-    const data = localStorage.getItem('contacts');
+    // Read contacts from indexedDB
+    const tx_contacts = db.value.transaction('contacts', 'readonly');
+    const data = await tx_contacts.store.getAll();
     if (data) {
-        contacts.value = JSON.parse(data);
+        contacts.value = data;
         results.value = contacts.value;
     }
     contacts.value.map(item => {
@@ -807,6 +809,7 @@ async function load_contacts() {
 }
 
 async function create_notification(secret, body) {
+    console.log('Creating notification:', secret, body);
     const name = contacts.value.find(item => item.secret == secret).name;
     Notification.requestPermission().then((result) => {
         if (result === "granted") {
@@ -857,7 +860,12 @@ async function firebase_setup() {
 }
 
 async function read_keys() {
-    //
+    // Read keys from indexedDB
+    const tx_keys = db.value.transaction('keys', 'readonly');
+    name.value = await tx_keys.store.get('name');
+    secret.value = await tx_keys.store.get('secret');
+    pubkey.value = await readKey({ armoredKey: await tx_keys.store.get('public') });
+    privkey.value = await readKey({ armoredKey: await tx_keys.store.get('private') });
 }
 
 async function create_keys() {
@@ -872,29 +880,22 @@ async function create_keys() {
         format: 'armored'
     })
 
-    // Save keys to indexedDB
-    const transaction = db.value.transaction(['keys'], 'readwrite');
-    const objectStore = transaction.objectStore('keys');
+    // Save keys to database
+    const tx = db.value.transaction('keys', 'readwrite');
+    await Promise.all([
+        tx.store.put(secretKey, 'name'),
+        tx.store.put(secretKey, 'secret'),
+        tx.store.put(privateKey, 'private'),
+        tx.store.put(publicKey, 'public'),
+        tx.done,
+    ]);
 
-    const items = [
-        {
-            type: "secret",
-            key: secretKey
-        },
-        {
-            type: "private",
-            key: privateKey
-        },
-        {
-            type: "public",
-            key: publicKey
-        }
-    ]
-    items.map(item => objectStore.add(item));
     localStorage.setItem('init', true);
 
     // Set registration to true
     registration.value = true;
+
+    console.log('Keys created!');
 }
 
 onBeforeMount(async () => {
@@ -912,18 +913,10 @@ onBeforeMount(async () => {
     await load_database();
 
     // Generate one time secret if empty
-    if (localStorage.getItem('init') === null) await create_keys();
+    if (!localStorage.getItem('init')) await create_keys();
 
     // Set values
     await read_keys();
-
-    secret.value = localStorage.getItem('secret');
-    pubkey.value = await readKey({ armoredKey: localStorage.getItem('public') });
-    privkey.value = await readKey({ armoredKey: localStorage.getItem('private') });
-    name.value = localStorage.getItem('name') || secret.value;
-
-    // Load contacts
-    load_contacts();
 
     // Create fuzzy search
     fuse.value = new Fuse(contacts.value, {

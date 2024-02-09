@@ -1,7 +1,7 @@
 // Give the service worker access to Firebase Messaging.
 importScripts('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js');
 importScripts('https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js');
-importScripts('https://unpkg.com/browse/openpgp@5.11.0/dist/openpgp.min.js');
+importScripts('https://unpkg.com/openpgp@5.11.0/dist/openpgp.min.js');
 
 // Initialize the Firebase app
 firebase.initializeApp({
@@ -14,7 +14,6 @@ firebase.initializeApp({
 });
 
 // Get the private key from indexedDB
-con
 
 // Create an instance of the Firebase messaging service
 const messaging = firebase.messaging();
@@ -33,8 +32,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 // Decrypt message using our private key
-async function decrypt(msg) {
-
-}
+// async function decrypt(msg) {
+// }
 
 console.log('Service Worker Registered');
