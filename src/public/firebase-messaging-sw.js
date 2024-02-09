@@ -34,8 +34,6 @@ async function handle_message(payload) {
         await setup();
     }
 
-    console.log('Decrypting message:', body, "with private key:", privkey);
-
     // Decrypt message
     const decrypted = await openpgp.decrypt({
         message: await openpgp.readMessage({ armoredMessage: body }),

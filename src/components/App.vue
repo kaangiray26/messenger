@@ -865,8 +865,6 @@ async function handle_message(payload) {
     const title = payload.notification.title;
     const body = payload.notification.body;
 
-    console.log('Decrypting message:', body, "with private key:", privkey);
-
     // Decrypt message
     const decrypted = await decrypt({
         message: await readMessage({ armoredMessage: body }),
@@ -886,7 +884,7 @@ async function handle_message(payload) {
     }
 
     // Add to database
-    const tx = db.transaction('messages', 'readwrite');
+    const tx = db.value.transaction('messages', 'readwrite');
     await tx.store.put(msg);
 
     // Set notification
