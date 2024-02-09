@@ -861,14 +861,44 @@ async function create_notification(secret, body) {
     });
 }
 
+async function handle_message(payload) {
+    const title = payload.notification.title;
+    const body = payload.notification.body;
+
+    console.log('Decrypting message:', body, "with private key:", privkey);
+
+    // Decrypt message
+    const decrypted = await decrypt({
+        message: await readMessage({ armoredMessage: body }),
+        decryptionKeys: privkey.value
+    });
+
+    // Message object
+    const time = new Date();
+    const msg = {
+        secret: title,
+        data: decrypted.data,
+        me: false,
+        dt: time.toLocaleTimeString('en-GB', {
+            hour: 'numeric', minute: 'numeric'
+        }),
+        timestamp: +time
+    }
+
+    // Add to database
+    const tx = db.transaction('messages', 'readwrite');
+    await tx.store.put(msg);
+
+    // Set notification
+    create_notification(title, decrypted.data);
+}
+
 async function firebase_setup() {
     console.log("Firebase setup...");
     const app = initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
 
-    onMessage(messaging, (payload) => {
-        console.log('Message received. ', payload);
-    });
+    onMessage(messaging, handle_message);
 
     // Push notification registration
     if (localStorage.getItem('push')) return;
