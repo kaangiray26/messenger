@@ -195,6 +195,11 @@ const peerConfig = {
             username: "90e794d7186335533be6a215",
             credential: "05ker3YuARTJkdfP",
         },
+        {
+            urls: "turn:standard.relay.metered.ca:443",
+            username: "90e794d7186335533be6a215",
+            credential: "05ker3YuARTJkdfP",
+        },
     ]
 }
 
@@ -478,7 +483,7 @@ async function send_push_notification(msg) {
     }
 
     // Send message
-    const response = await fetch('http://localhost:3000/send', {
+    const response = await fetch(server + '/send', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
