@@ -412,7 +412,15 @@ async function delete_chat() {
 }
 
 async function open_keyboard() {
-    if ("virtualKeyboard" in navigator) navigator.virtualKeyboard.show();
+    if ("virtualKeyboard" in navigator) {
+        navigator.virtualKeyboard.show();
+        nextTick(() => {
+            messages.value.scroll({
+                top: messages.value.scrollHeight,
+                behavior: 'smooth'
+            })
+        })
+    }
 }
 
 async function logout() {

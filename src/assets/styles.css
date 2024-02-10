@@ -12,6 +12,11 @@ body {
     user-select: none;
 }
 
+.dropdown {
+    width: 32px;
+    height: 32px;
+}
+
 .dropdown-menu {
     padding: 0;
 }
@@ -154,7 +159,6 @@ canvas {
     height: 100%;
     background-color: white;
     z-index: 0;
-    border-right: 1px solid #eceff4;
 }
 
 .right-pane {
@@ -352,6 +356,11 @@ canvas {
 
     .contact-header {
         padding: 0.5rem 1rem;
+    }
+
+    .left-pane {
+        border-right: 1px solid #ccc !important;
+        box-sizing: border-box !important;
     }
 
     .right-pane {
