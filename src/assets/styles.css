@@ -222,8 +222,17 @@ canvas {
     color: var(--bs-dark);
 }
 
+.dropdown>.dropdown-toggle {
+    padding: 0.25rem;
+    border-radius: 50%;
+}
+
 .dropdown-toggle::after {
     content: none;
+}
+
+.dropdown-toggle.show {
+    background-color: #eceff4 !important;
 }
 
 .dropdown-item {

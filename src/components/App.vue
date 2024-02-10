@@ -3,29 +3,50 @@
         <div class="row row-cols-2 g-0 flex-fill shadow">
             <div class="col-12 col-md-3 left-pane">
                 <div class="d-flex flex-column h-100">
-                    <div class="d-flex flex-wrap align-items-center p-3">
+                    <div class="d-flex flex-wrap align-items-end p-3">
                         <h1 class="material-symbols pe-2 mb-0">voice_selection</h1>
                         <h1 class="fw-bold text-break mb-0">Messenger</h1>
-                    </div>
-                    <div class="d-flex px-3 mb-3">
-                        <span class="fw-bold selectable">{{ name }}</span>
-                    </div>
-                    <div class="d-flex px-3 mb-3">
-                        <div class="dropdown">
+                        <div class="dropdown ms-auto">
                             <span class="material-symbols-outlined dropdown-toggle" role="button" data-bs-toggle="dropdown"
                                 aria-expanded="false" @click="requestPermission">
-                                more_horiz
+                                more_vert
                             </span>
                             <ul class="dropdown-menu">
-                                <li class="dropdown-li"><a class="dropdown-item" @click="changing = true">Change name</a>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="changing = true">
+                                        <span class="bi bi-pencil-fill pe-1"></span>
+                                        Change name
+                                    </a>
                                 </li>
-                                <li class="dropdown-li"><a class="dropdown-item" @click="qr_visible = true">Show QR</a></li>
-                                <li class="dropdown-li"><a class="dropdown-item" @click="adding = true">Add code</a></li>
-                                <li class="dropdown-li"><a class="dropdown-item" @click="qr_scan">Scan QR</a></li>
-                                <li class="dropdown-li"><a class="dropdown-item" @click="logging_out = true">Log out</a>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="qr_visible = true">
+                                        <span class="bi bi-qr-code pe-1"></span>
+                                        Show QR
+                                    </a>
+                                </li>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="qr_scan">
+                                        <span class="bi bi-qr-code-scan pe-1"></span>
+                                        Scan QR
+                                    </a>
+                                </li>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="adding = true">
+                                        <span class="bi bi-key-fill pe-1"></span>
+                                        Add code
+                                    </a>
+                                </li>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="logging_out = true">
+                                        <span class="bi bi-door-open-fill pe-1"></span>
+                                        Log out
+                                    </a>
                                 </li>
                             </ul>
                         </div>
+                    </div>
+                    <div class="d-flex px-3 mb-3">
+                        <span class="fw-bold selectable">{{ name }}</span>
                     </div>
                     <div class="input-group px-3 mb-2">
                         <span class="input-group-text bi bi-search" id="username-search"></span>
@@ -972,6 +993,14 @@ onBeforeMount(async () => {
             if (contact.value) contact.value = null;
         });
     }
+
+    // Handle visibility change
+    document.onvisibilitychange = () => {
+        if (document.visibilityState === 'hidden') {
+            console.log('App is now hidden');
+            contact.value = null;
+        }
+    };
 
     // Configure the virtual keyboard
     if ("virtualKeyboard" in navigator) {
