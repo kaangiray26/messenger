@@ -990,12 +990,16 @@ onBeforeMount(async () => {
         desktop.value = true;
     }
 
-    // Handle visibility change
+    // Handle visibility changes
     document.onvisibilitychange = () => {
         if (document.visibilityState === 'hidden') {
             console.log('App is now hidden');
             contact.value = null;
         }
+    };
+    document.onbeforeunload = () => {
+        console.log('App is now closed');
+        contact.value = null;
     };
 
     // Configure the virtual keyboard
