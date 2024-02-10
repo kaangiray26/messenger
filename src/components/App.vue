@@ -988,10 +988,6 @@ onBeforeMount(async () => {
     // Set device mode
     if (window.innerWidth > 768) {
         desktop.value = true;
-    } else {
-        document.addEventListener('backbutton', () => {
-            if (contact.value) contact.value = null;
-        });
     }
 
     // Handle visibility change
