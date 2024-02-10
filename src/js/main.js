@@ -13,7 +13,7 @@ async function register() {
             console.error('Service Worker registration failed:', err);
             return
         }
-        console.log('Service Worker registered with scope:', registration.scope);
+        console.info('Service Worker registered with scope:', registration.scope);
     }
 }
 

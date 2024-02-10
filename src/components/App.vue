@@ -471,6 +471,12 @@ async function send_message(data) {
     // 1: Use the already present connection and send the message
     if (conns.value[data.contact.secret].conn) {
         const connection = conns.value[data.contact.secret];
+        connection.metadata = {
+            from: secret.value,
+            to: data.contact.secret,
+            body: encrypted,
+            message: data.message
+        }
         connection.conn.send({
             type: 'message',
             message: encrypted
@@ -485,10 +491,12 @@ async function send_message(data) {
         metadata: {
             from: secret.value,
             to: data.contact.secret,
-            body: encrypted
+            body: encrypted,
+            message: data.message
         }
     })
     connection.on('open', async () => {
+        console.log('New connection created:', connection.metadata.to);
         await handle_outgoing_connection(connection);
         connection.send({
             type: 'message',
@@ -496,13 +504,10 @@ async function send_message(data) {
         });
         return
     })
-    connection.on('error', (error) => {
-        console.log('Sending message error:', error);
-    })
 }
 
 async function send_push_notification(msg) {
-    console.log("Trying to send message via firebase:", msg);
+    console.log("Trying to send message via firebase:", msg.to, msg.message);
 
     // Create a message
     const payload = {
@@ -520,7 +525,7 @@ async function send_push_notification(msg) {
         body: JSON.stringify(payload)
     }).then(res => res.text());
 
-    console.log("Firebase response:", response);
+    // console.log("Firebase response:", response);
 }
 
 async function add_contact(item) {
@@ -588,13 +593,13 @@ async function open_chat(item) {
     // Load messages
     const tx = db.value.transaction('messages', 'readonly');
     const msgs = await tx.store.index('secret').getAll(item.secret);
-    console.log('Messages:', msgs);
     conns.value[item.secret].items = msgs;
 
     nextTick(() => {
+        if (desktop.value) textarea.value.focus();
         messages.value.scroll({
             top: messages.value.scrollHeight,
-            behavior: 'smooth'
+            behavior: 'auto'
         })
     })
 }
@@ -826,9 +831,11 @@ async function peer_setup() {
         console.log('New Peer created:', peer.value.id);
     })
     peer.value.on('error', (error) => {
+        console.log('Peer error:', error);
         if (error.type == "peer-unavailable") {
             const connection_id = error.message.split(' ').pop();
             const msg = peer.value.connections[connection_id][0].metadata;
+            peer.value.connections[connection_id][0].close();
 
             // Try to send via firebase
             send_push_notification(msg);
@@ -923,7 +930,7 @@ async function handle_message(payload) {
 }
 
 async function firebase_setup() {
-    console.log("Firebase setup...");
+    // console.log("Firebase setup...");
     const app = initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
 
@@ -1007,12 +1014,12 @@ onBeforeMount(async () => {
     // Handle visibility changes
     document.onvisibilitychange = () => {
         if (document.visibilityState === 'hidden') {
-            console.log('App is now hidden');
+            // console.log('App is now hidden');
             contact.value = null;
         }
     };
     document.onbeforeunload = () => {
-        console.log('App is now closed');
+        // console.log('App is now closed');
         contact.value = null;
     };
 
