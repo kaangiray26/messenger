@@ -82,9 +82,18 @@
                                 more_vert
                             </span>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li class="dropdown-li"><a class="dropdown-item" @click="changing = true">Change name</a>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="changing = true">
+                                        <span class="bi bi-pencil-fill pe-1"></span>
+                                        Change name
+                                    </a>
                                 </li>
-                                <li class="dropdown-li"><a class="dropdown-item" @click="delete_chat">Delete chat</a></li>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="delete_chat">
+                                        <span class="bi bi-trash-fill pe-1"></span>
+                                        Delete chat
+                                    </a>
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -171,7 +180,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeMount, nextTick, onBeforeUnmount } from 'vue';
+import { ref, onBeforeMount, nextTick } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
@@ -796,9 +805,6 @@ async function handle_outgoing_connection(connection) {
 }
 
 async function peer_setup() {
-    // Destroy old peer
-    if (peer.value) peer.value.disconnect();
-
     // Create peer
     const totp = await generate_totp(secret.value);
     peer.value = new Peer([totp], {
