@@ -26,8 +26,8 @@ async function setup() {
 }
 
 async function handle_message(payload) {
-    const title = payload.notification.title;
-    const body = payload.notification.body;
+    const title = payload.data.title;
+    const body = payload.data.body;
 
     // Check if private key is available
     if (!privkey) {

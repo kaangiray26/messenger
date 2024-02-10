@@ -150,7 +150,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeMount, nextTick } from 'vue';
+import { ref, onBeforeMount, nextTick, onBeforeUnmount } from 'vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
@@ -782,7 +782,7 @@ async function handle_outgoing_connection(connection) {
 
 async function peer_setup() {
     // Destroy old peer
-    if (peer.value) peer.value.destroy();
+    if (peer.value) peer.value.disconnect();
 
     // Create peer
     const totp = await generate_totp(secret.value);
@@ -866,8 +866,8 @@ async function create_notification(secret, body) {
 }
 
 async function handle_message(payload) {
-    const title = payload.notification.title;
-    const body = payload.notification.body;
+    const title = payload.data.title;
+    const body = payload.data.body;
 
     // Decrypt message
     const decrypted = await decrypt({
@@ -977,16 +977,15 @@ onBeforeMount(async () => {
     // Set device mode
     if (window.innerWidth > 768) {
         desktop.value = true;
+    } else {
+        document.addEventListener('backbutton', () => {
+            if (contact.value) contact.value = null;
+        });
     }
 
     // Configure the virtual keyboard
     if ("virtualKeyboard" in navigator) {
         navigator.virtualKeyboard.overlaysContent = true;
-    }
-
-    // Back button handler
-    window.onpopstate = () => {
-        if (contact.value) contact.value = null;
     }
 
     // Load database
