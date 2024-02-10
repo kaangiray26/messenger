@@ -386,7 +386,6 @@ async function open_keyboard() {
 }
 
 async function logout() {
-    console.log('Logging out...');
     // Clear localStorage
     localStorage.clear();
 
@@ -399,11 +398,6 @@ async function logout() {
 }
 
 async function send_message(data) {
-    console.log('Sending message:', data);
-
-    // Create a unique identifier for the message
-    const uid = await generate_secret();
-
     // Encrypt message
     const encrypted = await encrypt({
         message: await createMessage({ text: data.message }),
@@ -848,11 +842,9 @@ async function load_database() {
 }
 
 async function create_notification(secret, body) {
-    console.log('Creating notification:', secret, body);
     const name = contacts.value.find(item => item.secret == secret).name;
     Notification.requestPermission().then(async (result) => {
         if (result === "granted") {
-            console.log(await navigator.serviceWorker.ready);
             navigator.serviceWorker.ready.then((registration) => {
                 registration.showNotification(name, {
                     body: body,
@@ -969,8 +961,6 @@ async function create_keys() {
 
     // Set registration to true
     registration.value = true;
-
-    console.log('Keys created!');
 }
 
 onBeforeMount(async () => {

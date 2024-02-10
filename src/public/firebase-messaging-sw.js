@@ -72,7 +72,6 @@ messaging.onBackgroundMessage(handle_message);
 
 // Event handler for notification click
 self.addEventListener('notificationclick', function (event) {
-    console.log('Notification clicked');
     event.notification.close();
     event.waitUntil(
         clients.openWindow('https://messenger.buzl.uk')
