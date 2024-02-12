@@ -186,17 +186,17 @@ import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { generateKey, readKey, encrypt, decrypt, createMessage, readMessage } from 'openpgp';
-import { openDB, deleteDB, wrap, unwrap } from 'idb';
+import { openDB, deleteDB } from 'idb';
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
 import jsQR from "jsqr";
 
 // Secrets
-const countdown = ref(0);
+const name = ref(null);
+const token = ref(null);
 const secret = ref(null);
 const pubkey = ref(null);
 const privkey = ref(null);
-const name = ref(null);
 
 // states
 const ready = ref(true);
@@ -253,8 +253,8 @@ const qr_visible = ref(false);
 const fuse = ref(null);
 
 // firebase
-const server = "https://home.buzl.uk";
-const registration = ref(false);
+// const server = "https://home.buzl.uk";
+const server = "http://localhost:3000"
 const firebaseConfig = {
     apiKey: "AIzaSyAh17S_KmK43c9U85OudQpti_JQ8hdYJn4",
     authDomain: "kaangiray26-messenger.firebaseapp.com",
@@ -271,34 +271,8 @@ async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
 }
 
-async function generate_totp(key) {
-    // Get unixtime with minutes precision
-    const dt = new Date();
-    const seconds = dt.getUTCSeconds() < 30 ? '0' : '1';
-    const timestring = `${parseInt(Date.now() / 1000 / 60)}${seconds}`
-
-    // Hash the secret + timestring with SHA-256
-    const encoder = new TextEncoder();
-    const data = encoder.encode(key + timestring);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-
-    // Convert the hash to string
-    const hashArray = Array.from(new Uint8Array(hash));
-    const code = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // Display the code
-    return code;
-}
-
 async function copy_qrcode() {
     await navigator.clipboard.writeText(qrcode_data.value);
-}
-
-async function get_countdown() {
-    countdown.value = 30 - (new Date().getUTCSeconds() % 30);
-    if (countdown.value === 30) {
-        peer_setup();
-    }
 }
 
 async function handle_keys(event) {
@@ -424,6 +398,7 @@ async function open_keyboard() {
 }
 
 async function logout() {
+    console.log('Logging out...');
     // Clear localStorage
     localStorage.clear();
 
@@ -436,6 +411,7 @@ async function logout() {
 }
 
 async function send_message(data) {
+    console.log("Send message called:", data);
     // Encrypt message
     const encrypted = await encrypt({
         message: await createMessage({ text: data.message }),
@@ -470,12 +446,12 @@ async function send_message(data) {
 
     // 1: Use the already present connection and send the message
     if (conns.value[data.contact.secret].conn) {
+        console.log("Case 1:trying...");
         const connection = conns.value[data.contact.secret];
         connection.metadata = {
             from: secret.value,
             to: data.contact.secret,
             body: encrypted,
-            message: data.message
         }
         connection.conn.send({
             type: 'message',
@@ -485,14 +461,13 @@ async function send_message(data) {
     }
 
     // 2: Try to create a new connection and send the message
-    const totp = await generate_totp(data.contact.secret);
-    const connection = peer.value.connect(totp, {
+    console.log("Case 2:trying...");
+    const connection = peer.value.connect(data.contact.secret, {
         reliable: true,
         metadata: {
             from: secret.value,
             to: data.contact.secret,
             body: encrypted,
-            message: data.message
         }
     })
     connection.on('open', async () => {
@@ -507,7 +482,7 @@ async function send_message(data) {
 }
 
 async function send_push_notification(msg) {
-    console.log("Trying to send message via firebase:", msg.to, msg.message);
+    console.log("Trying to send message via firebase:", msg.to, msg.body);
 
     // Create a message
     const payload = {
@@ -525,7 +500,7 @@ async function send_push_notification(msg) {
         body: JSON.stringify(payload)
     }).then(res => res.text());
 
-    // console.log("Firebase response:", response);
+    console.log("Firebase response:", response);
 }
 
 async function add_contact(item) {
@@ -534,8 +509,7 @@ async function add_contact(item) {
     const found = await db.value.getFromIndex('contacts', 'secret', item);
     if (found) return;
 
-    const totp = await generate_totp(item);
-    const connection = peer.value.connect(totp, {
+    const connection = peer.value.connect(item, {
         reliable: true,
         metadata: {
             from: secret.value,
@@ -746,6 +720,11 @@ async function handle_incoming_connection(connection) {
         }
     });
 
+    // Error handler
+    connection.on('error', (err) => {
+        console.log('Connection incoming error:', err.type, connection.metadata);
+    })
+
     // Close handler
     connection.on('close', () => {
         console.log('Connection closed:', connection.metadata.from);
@@ -802,28 +781,43 @@ async function handle_outgoing_connection(connection) {
         }
     });
 
+    // Error handler
+    connection.on('error', (err) => {
+        console.log('Connection outgoing error:', err.type, connection.metadata);
+    })
+
     // Close handler
     connection.on('close', () => {
         console.log('Connection closed:', connection.metadata.to);
         conns.value[connection.metadata.to].conn = null;
     })
 
-    // Error handler
-    connection.on('error', () => {
-        console.log('Connection error:', connection.metadata.to);
-    })
-
     // Add connection to list
-    conns.value[connection.metadata.to].conn = connection;
+    if (conns.value[connection.metadata.to]) {
+        conns.value[connection.metadata.to].conn = connection;
+        return
+    }
+    conns.value[connection.metadata.to] = {
+        conn: connection,
+        items: [],
+        notification: false,
+        pubkey: null
+    }
 }
 
 async function peer_setup() {
+    console.log('Setting up peer...');
+
     // Create peer
-    const totp = await generate_totp(secret.value);
-    peer.value = new Peer([totp], {
-        config: peerConfig
+    peer.value = new Peer([secret.value], {
+        host: 'localhost',
+        port: 3000,
+        path: '/',
+        token: token.value,
+        config: peerConfig,
     });
     peer.value.on('connection', (connection) => {
+        console.log('Incoming connection:', connection.metadata.from);
         handle_incoming_connection(connection);
     })
     peer.value.on('open', () => {
@@ -831,7 +825,6 @@ async function peer_setup() {
         console.log('New Peer created:', peer.value.id);
     })
     peer.value.on('error', (error) => {
-        console.log('Peer error:', error);
         if (error.type == "peer-unavailable") {
             const connection_id = error.message.split(' ').pop();
             const msg = peer.value.connections[connection_id][0].metadata;
@@ -973,6 +966,7 @@ async function read_keys() {
     const tx_keys = db.value.transaction('keys', 'readonly');
     name.value = await tx_keys.store.get('name');
     secret.value = await tx_keys.store.get('secret');
+    token.value = await tx_keys.store.get('token');
     pubkey.value = await readKey({ armoredKey: await tx_keys.store.get('public') });
     privkey.value = await readKey({ armoredKey: await tx_keys.store.get('private') });
 }
@@ -980,6 +974,9 @@ async function read_keys() {
 async function create_keys() {
     // Create peer secret
     const secretKey = await generate_secret();
+
+    // Create peer token
+    const token = await generate_secret();
 
     // Create public and private keys
     const { privateKey, publicKey, revocationCertificate } = await generateKey({
@@ -994,15 +991,13 @@ async function create_keys() {
     await Promise.all([
         tx.store.put(secretKey, 'name'),
         tx.store.put(secretKey, 'secret'),
+        tx.store.put(token, 'token'),
         tx.store.put(privateKey, 'private'),
         tx.store.put(publicKey, 'public'),
         tx.done,
     ]);
 
     localStorage.setItem('init', true);
-
-    // Set registration to true
-    registration.value = true;
 }
 
 onBeforeMount(async () => {
@@ -1017,10 +1012,6 @@ onBeforeMount(async () => {
             // console.log('App is now hidden');
             contact.value = null;
         }
-    };
-    document.onbeforeunload = () => {
-        // console.log('App is now closed');
-        contact.value = null;
     };
 
     // Configure the virtual keyboard
@@ -1037,22 +1028,17 @@ onBeforeMount(async () => {
     // Set values
     await read_keys();
 
+    // Setup peer
+    peer_setup();
+
+    // Configure firebase
+    firebase_setup();
+
     // Create fuzzy search
     fuse.value = new Fuse(contacts.value, {
         keys: ['name', 'secret'],
         threshold: 0.3,
     })
-
-    // Configure firebase
-    firebase_setup();
-
-    // Setup peer
-    peer_setup();
-
-    // Loop every second
-    setInterval(() => {
-        get_countdown();
-    }, 1000);
 
     // Create qr code
     qrcode_data.value = secret.value;
