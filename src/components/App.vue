@@ -89,9 +89,15 @@
                                     </a>
                                 </li>
                                 <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="delete_chat">
+                                    <a class="dropdown-item" @click="clear_chat">
+                                        <span class="bi bi-eraser-fill pe-1"></span>
+                                        Clear chat
+                                    </a>
+                                </li>
+                                <li class="dropdown-li">
+                                    <a class="dropdown-item" @click="remove_contact">
                                         <span class="bi bi-trash-fill pe-1"></span>
-                                        Delete chat
+                                        Remove contact
                                     </a>
                                 </li>
                             </ul>
@@ -369,7 +375,25 @@ async function change_name() {
     changing.value = false;
 }
 
-async function delete_chat() {
+async function clear_chat() {
+    const secret = contact.value.secret;
+
+    // Clear the chat
+    conns.value[secret].items = [];
+
+    // Clear messages that has the same secret in the index
+    const tx = db.value.transaction('messages', 'readwrite');
+    const index = tx.store.index('secret');
+    const keys = await index.getAllKeys(secret);
+
+    for (const key of keys) {
+        await tx.store.delete(key);
+    }
+
+    console.info('Chat cleared!');
+}
+
+async function remove_contact() {
     // Remove contact from array
     const index = contacts.value.findIndex(item => item.secret == contact.value.secret);
     contacts.value.splice(index, 1);
@@ -411,7 +435,8 @@ async function logout() {
 }
 
 async function send_message(data) {
-    console.log("Send message called:", data);
+    console.log("Message to send:", data);
+
     // Encrypt message
     const encrypted = await encrypt({
         message: await createMessage({ text: data.message }),
@@ -446,7 +471,6 @@ async function send_message(data) {
 
     // 1: Use the already present connection and send the message
     if (conns.value[data.contact.secret].conn) {
-        console.log("Case 1:trying...");
         const connection = conns.value[data.contact.secret];
         connection.metadata = {
             from: secret.value,
@@ -461,7 +485,6 @@ async function send_message(data) {
     }
 
     // 2: Try to create a new connection and send the message
-    console.log("Case 2:trying...");
     const connection = peer.value.connect(data.contact.secret, {
         reliable: true,
         metadata: {
@@ -471,36 +494,13 @@ async function send_message(data) {
         }
     })
     connection.on('open', async () => {
-        console.log('New connection created:', connection.metadata.to);
-        await handle_outgoing_connection(connection);
+        handle_outgoing_connection(connection);
         connection.send({
             type: 'message',
             message: encrypted
         });
         return
     })
-}
-
-async function send_push_notification(msg) {
-    console.log("Trying to send message via firebase:", msg.to, msg.body);
-
-    // Create a message
-    const payload = {
-        from: msg.from,
-        to: msg.to,
-        body: msg.body,
-    }
-
-    // Send message
-    const response = await fetch(server + '/send', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-    }).then(res => res.text());
-
-    console.log("Firebase response:", response);
 }
 
 async function add_contact(item) {
@@ -649,7 +649,7 @@ function tick() {
 async function handle_incoming_connection(connection) {
     // Data handler
     connection.on('data', async (data) => {
-        console.log('Incoming data:', data);
+        console.info('Incoming data:', data);
         // Handle handshake
         if (data.type == 'handshake') {
             const found = contacts.value.filter(ct => ct.secret == data.secret).length;
@@ -695,7 +695,9 @@ async function handle_incoming_connection(connection) {
             });
 
             // Set notification
-            if (!contact.value || contact.value.secret != connection.metadata.from) {
+            const isOpen = contact.value && contact.value.secret == connection.metadata.from;
+
+            if (!isOpen) {
                 conns.value[connection.metadata.from].notification = true;
                 create_notification(connection.metadata.from, decrypted.data);
             }
@@ -715,8 +717,19 @@ async function handle_incoming_connection(connection) {
             // Add to database
             const tx = db.value.transaction('messages', 'readwrite');
             await tx.store.put(msg);
+
+            // Add to chat
             conns.value[connection.metadata.from].items.push(msg);
-            return
+
+            // Scroll down
+            if (isOpen) {
+                nextTick(() => {
+                    messages.value.scroll({
+                        top: messages.value.scrollHeight,
+                        behavior: 'smooth'
+                    })
+                })
+            }
         }
     });
 
@@ -727,7 +740,7 @@ async function handle_incoming_connection(connection) {
 
     // Close handler
     connection.on('close', () => {
-        console.log('Connection closed:', connection.metadata.from);
+        console.log('Connection incoming closed:', connection.metadata.from);
         conns.value[connection.metadata.from].conn = null;
     })
 
@@ -757,7 +770,9 @@ async function handle_outgoing_connection(connection) {
             });
 
             // Set notification
-            if (!contact.value || contact.value.secret != connection.metadata.to) {
+            const isOpen = contact.value && contact.value.secret == connection.metadata.to;
+
+            if (!isOpen) {
                 conns.value[connection.metadata.to].notification = true;
                 create_notification(connection.metadata.to, decrypted.data);
             }
@@ -777,7 +792,19 @@ async function handle_outgoing_connection(connection) {
             // Add to database
             const tx = db.value.transaction('messages', 'readwrite');
             await tx.store.put(msg);
+
+            // Add to chat
             conns.value[connection.metadata.to].items.push(msg);
+
+            // Scroll down
+            if (isOpen) {
+                nextTick(() => {
+                    messages.value.scroll({
+                        top: messages.value.scrollHeight,
+                        behavior: 'smooth'
+                    })
+                })
+            }
         }
     });
 
@@ -816,23 +843,15 @@ async function peer_setup() {
         token: token.value,
         config: peerConfig,
     });
+    peer.value.on('close', () => {
+        console.log("Peer close event!");
+    })
     peer.value.on('connection', (connection) => {
-        console.log('Incoming connection:', connection.metadata.from);
+        console.log('New incoming connection created:', connection.metadata.from);
         handle_incoming_connection(connection);
     })
     peer.value.on('open', () => {
-        // ready.value = true;
         console.log('New Peer created:', peer.value.id);
-    })
-    peer.value.on('error', (error) => {
-        if (error.type == "peer-unavailable") {
-            const connection_id = error.message.split(' ').pop();
-            const msg = peer.value.connections[connection_id][0].metadata;
-            peer.value.connections[connection_id][0].close();
-
-            // Try to send via firebase
-            send_push_notification(msg);
-        }
     })
 }
 
