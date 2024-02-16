@@ -12,6 +12,20 @@ body {
     user-select: none;
 }
 
+.icon-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    padding: 0.5rem;
+    cursor: pointer;
+}
+
+.icon-btn:hover,
+.icon-btn:active {
+    background-color: #eceff4 !important;
+}
+
 .dropdown {
     width: 32px;
     height: 32px;
@@ -29,7 +43,7 @@ body {
 textarea {
     resize: none;
     border: none !important;
-    background-color: #eceff4 !important;
+    background-color: white !important;
     color: black !important;
     min-height: unset !important;
     padding: 0.5rem !important;
@@ -301,6 +315,19 @@ canvas {
     z-index: 1;
 }
 
+.overlay-fullscreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+}
+
 .loading-icon {
     width: 100px;
     height: 100px;
@@ -317,6 +344,26 @@ canvas {
 
 .page {
     padding: 0;
+}
+
+.videocall-dst {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    z-index: 1;
+}
+
+.videocall-src {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 20%;
+    height: 20%;
+    object-fit: contain;
+    z-index: 2;
 }
 
 /** Nord colors **/

@@ -1,6 +1,7 @@
 <template>
     <div class="page container d-flex flex-fill h-100">
         <div class="row row-cols-2 g-0 flex-fill shadow">
+            <!-- Left Pane -->
             <div class="col-12 col-md-3 left-pane">
                 <div class="d-flex flex-column h-100">
                     <div class="d-flex flex-wrap align-items-end p-3">
@@ -68,6 +69,7 @@
                     </div>
                 </div>
             </div>
+            <!-- Right Pane -->
             <div v-if="contact" class="right-pane" :class="{ 'd-block col-12': contact }">
                 <div class="d-flex flex-column h-100">
                     <div class="contact-header">
@@ -76,31 +78,39 @@
                         </span>
                         <img src="/images/person.svg" class="avatar me-2">
                         <span class="name">{{ contact.name }}</span>
-                        <div class="dropdown ms-auto">
-                            <span class="material-symbols-outlined dropdown-toggle" role="button" data-bs-toggle="dropdown"
-                                aria-expanded="false">
-                                more_vert
-                            </span>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="changing = true">
-                                        <span class="bi bi-pencil-fill pe-1"></span>
-                                        Change name
-                                    </a>
-                                </li>
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="clear_chat">
-                                        <span class="bi bi-eraser-fill pe-1"></span>
-                                        Clear chat
-                                    </a>
-                                </li>
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="remove_contact">
-                                        <span class="bi bi-trash-fill pe-1"></span>
-                                        Remove contact
-                                    </a>
-                                </li>
-                            </ul>
+                        <div class="d-flex align-items-center ms-auto">
+                            <div class="icon-btn me-2" @click="videocall_contact">
+                                <span class="material-symbols-outlined">video_call</span>
+                            </div>
+                            <div class="icon-btn me-2" @click="voicecall_contact">
+                                <span class="material-symbols-outlined">call</span>
+                            </div>
+                            <div class="dropdown">
+                                <span class="material-symbols-outlined dropdown-toggle" role="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                    more_vert
+                                </span>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li class="dropdown-li">
+                                        <a class="dropdown-item" @click="changing = true">
+                                            <span class="bi bi-pencil-fill pe-1"></span>
+                                            Change name
+                                        </a>
+                                    </li>
+                                    <li class="dropdown-li">
+                                        <a class="dropdown-item" @click="clear_chat">
+                                            <span class="bi bi-eraser-fill pe-1"></span>
+                                            Clear chat
+                                        </a>
+                                    </li>
+                                    <li class="dropdown-li">
+                                        <a class="dropdown-item" @click="remove_contact">
+                                            <span class="bi bi-trash-fill pe-1"></span>
+                                            Remove contact
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                     <div ref="messages" class="messages">
@@ -123,6 +133,7 @@
             </div>
         </div>
     </div>
+    <!-- Overlays -->
     <div v-if="qr_visible" id="qr">
         <div class="qr-container d-flex flex-column bg-white shadow p-3">
             <div class="d-flex justify-content-end mb-3">
@@ -183,10 +194,14 @@
             </div>
         </div>
     </div>
+    <VoiceCall ref="voicecall" :peer="peer"></VoiceCall>
+    <VideoCall ref="videocall" :peer="peer"></VideoCall>
 </template>
 
 <script setup>
 import { ref, onBeforeMount, nextTick } from 'vue';
+import VoiceCall from './VoiceCall.vue';
+import VideoCall from './VideoCall.vue';
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
@@ -259,8 +274,7 @@ const qr_visible = ref(false);
 const fuse = ref(null);
 
 // firebase
-// const server = "https://home.buzl.uk";
-const server = "http://localhost:3000"
+const server = "https://home.buzl.uk";
 const firebaseConfig = {
     apiKey: "AIzaSyAh17S_KmK43c9U85OudQpti_JQ8hdYJn4",
     authDomain: "kaangiray26-messenger.firebaseapp.com",
@@ -272,6 +286,10 @@ const firebaseConfig = {
 
 // database
 const db = ref(null);
+
+// Calls
+const videocall = ref(null);
+const voicecall = ref(null);
 
 async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
@@ -432,6 +450,22 @@ async function logout() {
 
     // Reload page
     window.location.href = window.location.origin + window.location.pathname;
+}
+
+async function videocall_contact() {
+    // Get name
+    const contact_secret = contact.value.secret;
+    const contact_name = contacts.value.find(item => item.secret == contact_secret).name;
+
+    videocall.value.make_call(contact_secret, contact_name);
+}
+
+async function voicecall_contact() {
+    // Get name
+    const contact_secret = contact.value.secret;
+    const contact_name = contacts.value.find(item => item.secret == contact_secret).name;
+
+    voicecall.value.make_call(contact_secret, contact_name);
 }
 
 async function send_message(data) {
@@ -646,6 +680,25 @@ function tick() {
     requestAnimationFrame(tick);
 }
 
+async function handle_incoming_call(call) {
+    console.log("Call:", call);
+    // Get metadata
+    const metadata = call.metadata;
+
+    const caller_id = call.metadata.secret;
+    const caller_name = contacts.value.find(item => item.secret == caller_id).name;
+
+    if (metadata.type == "voicecall") {
+        voicecall.value.incoming_call(call, caller_id, caller_name);
+        return
+    }
+
+    if (metadata.type == "videocall") {
+        videocall.value.incoming_call(call, caller_id, caller_name);
+        return
+    }
+}
+
 async function handle_incoming_connection(connection) {
     // Data handler
     connection.on('data', async (data) => {
@@ -834,24 +887,29 @@ async function handle_outgoing_connection(connection) {
 
 async function peer_setup() {
     console.log('Setting up peer...');
-
+    WebSocket
     // Create peer
     peer.value = new Peer([secret.value], {
-        host: 'localhost',
-        port: 3000,
+        host: 'home.buzl.uk',
+        port: 443,
         path: '/',
         token: token.value,
         config: peerConfig,
+        secure: true,
     });
-    peer.value.on('close', () => {
-        console.log("Peer close event!");
-    })
     peer.value.on('connection', (connection) => {
         console.log('New incoming connection created:', connection.metadata.from);
         handle_incoming_connection(connection);
     })
     peer.value.on('open', () => {
         console.log('New Peer created:', peer.value.id);
+    })
+    peer.value.on('close', () => {
+        console.log("Peer close event!");
+    })
+    peer.value.on('call', (call) => {
+        console.log("New incoming call");
+        handle_incoming_call(call);
     })
 }
 
