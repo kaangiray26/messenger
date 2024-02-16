@@ -201,13 +201,13 @@ canvas {
 .left-pane {
     height: 100%;
     background-color: white;
-    z-index: 0;
+    z-index: 1;
 }
 
 .pane-cover {
     top: 0;
     left: 0;
-    z-index: 1;
+    z-index: 0;
     height: 100%;
     background-color: #4c566a;
     display: none;
