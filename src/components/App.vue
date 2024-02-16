@@ -681,7 +681,6 @@ function tick() {
 }
 
 async function handle_incoming_call(call) {
-    console.log("Call:", call);
     // Get metadata
     const metadata = call.metadata;
 
