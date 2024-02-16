@@ -196,7 +196,6 @@ function switch_to_in_call() {
 }
 
 async function make_call(contact_secret, contact_name) {
-    console.log("Making voice call...");
     // Reset closer value
     closer.value = false;
 

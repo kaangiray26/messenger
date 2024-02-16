@@ -2,156 +2,18 @@
     <div class="page container d-flex flex-fill h-100">
         <div class="row row-cols-2 g-0 flex-fill shadow">
             <!-- Left Pane -->
-            <div class="col-12 col-md-3 left-pane">
-                <div class="d-flex flex-column h-100">
-                    <div class="d-flex flex-wrap align-items-end p-3">
-                        <h1 class="material-symbols pe-2 mb-0">voice_selection</h1>
-                        <h1 class="fw-bold text-break mb-0">Messenger</h1>
-                        <div class="dropdown ms-auto">
-                            <span class="material-symbols-outlined dropdown-toggle" role="button" data-bs-toggle="dropdown"
-                                aria-expanded="false" @click="requestPermission">
-                                more_vert
-                            </span>
-                            <ul class="dropdown-menu">
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="changing = true">
-                                        <span class="bi bi-pencil-fill pe-1"></span>
-                                        Change name
-                                    </a>
-                                </li>
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="qr_visible = true">
-                                        <span class="bi bi-qr-code pe-1"></span>
-                                        Show QR
-                                    </a>
-                                </li>
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="qr_scan">
-                                        <span class="bi bi-qr-code-scan pe-1"></span>
-                                        Scan QR
-                                    </a>
-                                </li>
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="adding = true">
-                                        <span class="bi bi-key-fill pe-1"></span>
-                                        Add code
-                                    </a>
-                                </li>
-                                <li class="dropdown-li">
-                                    <a class="dropdown-item" @click="logging_out = true">
-                                        <span class="bi bi-door-open-fill pe-1"></span>
-                                        Log out
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="d-flex px-3 mb-3">
-                        <span class="fw-bold selectable">{{ name }}</span>
-                    </div>
-                    <div class="input-group px-3 mb-2">
-                        <span class="input-group-text bi bi-search" id="username-search"></span>
-                        <input v-model="query" type="text" class="form-control" placeholder="Search..."
-                            aria-label="Username" aria-describedby="username-search" @input="get_results">
-                    </div>
-                    <div class="contacts">
-                        <div v-for="item in results" class="contact" @click="open_chat(item)">
-                            <div class="d-flex align-items-center">
-                                <img src="/images/person.svg" class="avatar me-2">
-                                <div class="d-flex flex-column">
-                                    <span class="name">{{ item.name }}</span>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-end align-items-center">
-                                <span v-show="conns[item.secret].notification" class="notification"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <LeftPane :name="name" :conns="conns" :contacts="contacts" :results="results" :query="query"
+                :get_results="get_results" @changing="changing = true" @show_qr="show_qr" @scan_qr="qr_scan"
+                @adding="adding = true" @logging_out="logging_out = true" @open_chat="open_chat">
+            </LeftPane>
             <!-- Right Pane -->
-            <div v-if="contact" class="right-pane" :class="{ 'd-block col-12': contact }">
-                <div class="d-flex flex-column h-100">
-                    <div class="contact-header">
-                        <span class="material-symbols-outlined clickable me-3" @click="contact = null">
-                            arrow_back
-                        </span>
-                        <img src="/images/person.svg" class="avatar me-2">
-                        <div class="text-truncate">
-                            <span class="name">{{ contact.name }}</span>
-                        </div>
-                        <div class="d-flex align-items-center ms-auto">
-                            <div class="icon-btn me-2" @click="videocall_contact">
-                                <span class="material-symbols-outlined">video_call</span>
-                            </div>
-                            <div class="icon-btn me-2" @click="voicecall_contact">
-                                <span class="material-symbols-outlined">call</span>
-                            </div>
-                            <div class="dropdown">
-                                <span class="material-symbols-outlined dropdown-toggle" role="button"
-                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                    more_vert
-                                </span>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li class="dropdown-li">
-                                        <a class="dropdown-item" @click="changing = true">
-                                            <span class="bi bi-pencil-fill pe-1"></span>
-                                            Change name
-                                        </a>
-                                    </li>
-                                    <li class="dropdown-li">
-                                        <a class="dropdown-item" @click="clear_chat">
-                                            <span class="bi bi-eraser-fill pe-1"></span>
-                                            Clear chat
-                                        </a>
-                                    </li>
-                                    <li class="dropdown-li">
-                                        <a class="dropdown-item" @click="remove_contact">
-                                            <span class="bi bi-trash-fill pe-1"></span>
-                                            Remove contact
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <div ref="messages" class="messages">
-                        <div v-for="(item, index) in conns[contact.secret].items" class="message shadow"
-                            :class="{ 'me': item.me }">
-                            <span class="selectable">{{ item.data }}</span>
-                            <span class="time">{{ item.dt }}</span>
-                        </div>
-                    </div>
-                    <div class="textarea-container">
-                        <textarea ref="textarea" v-model="message" class="form-control" placeholder="Message" rows="1"
-                            @keypress="handle_keys" @input="handle_input" @focus="open_keyboard"></textarea>
-                        <div class="send-button" @click="handle_send">
-                            <span class="material-symbols-outlined">
-                                send
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <RightPane ref="right_pane" :contact="contact" :conns="conns" :desktop="desktop" @close="contact = null"
+                @send_message="send_message" @changing="changing = true" @clear_chat="clear_chat"
+                @remove_contact="remove_contact" @videocall="videocall_contact" @voicecall="voicecall_contact"></RightPane>
         </div>
     </div>
     <!-- Overlays -->
-    <div v-if="qr_visible" id="qr">
-        <div class="qr-container d-flex flex-column bg-white shadow p-3">
-            <div class="d-flex justify-content-end mb-3">
-                <button class="btn btn-close" @click="qr_visible = false"></button>
-            </div>
-            <p class="mb-0">Scan this QR code to connect or click on it to copy.</p>
-            <img :src="qrcode" class="qr-code" @click="copy_qrcode">
-        </div>
-    </div>
-    <div v-if="!ready" class="overlay-blur">
-        <div class="d-flex flex-column align-items-center">
-            <img src="/images/star.svg" class="loading-icon">
-            <span class="my-3">Loading...</span>
-            <span class="btn btn-dark" @click="refresh">Refresh</span>
-        </div>
-    </div>
+    <QR_show ref="_QR_show" :qrcode_data="qrcode_data" :qrcode="qrcode"></QR_show>
     <div v-if="changing" class="overlay">
         <div class="d-flex flex-column bg-light rounded shadow p-3">
             <span class="fw-bold mb-3">Enter a new name</span>
@@ -202,14 +64,19 @@
 
 <script setup>
 import { ref, onBeforeMount, nextTick } from 'vue';
+import LeftPane from './LeftPane.vue';
+import RightPane from './RightPane.vue';
 import VoiceCall from './VoiceCall.vue';
 import VideoCall from './VideoCall.vue';
+import QR_show from '../overlays/QR_show.vue';
+
 import { Peer } from 'peerjs';
 import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { generateKey, readKey, encrypt, decrypt, createMessage, readMessage } from 'openpgp';
 import { openDB, deleteDB } from 'idb';
+
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
 import jsQR from "jsqr";
@@ -222,12 +89,18 @@ const pubkey = ref(null);
 const privkey = ref(null);
 
 // states
-const ready = ref(true);
 const desktop = ref(false);
 const adding = ref(false);
 const changing = ref(false);
 const logging_out = ref(false);
 const scanning = ref(false);
+
+// panes
+const left_pane = ref(null);
+const right_pane = ref(null);
+
+// overlays
+const _QR_show = ref(null);
 
 // input
 const query = ref('');
@@ -270,7 +143,6 @@ const canvas = ref(null);
 const context = ref(null);
 const qrcode = ref(null);
 const qrcode_data = ref(null);
-const qr_visible = ref(false);
 
 // fuzzy search
 const fuse = ref(null);
@@ -293,58 +165,13 @@ const db = ref(null);
 const videocall = ref(null);
 const voicecall = ref(null);
 
+// Overlay handlers
+const show_qr = () => {
+    _QR_show.value.show();
+}
+
 async function generate_secret() {
     return crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
-}
-
-async function copy_qrcode() {
-    await navigator.clipboard.writeText(qrcode_data.value);
-}
-
-async function handle_keys(event) {
-    if (desktop.value && !event.shiftKey && event.key === 'Enter') {
-        textarea.value.focus();
-        event.preventDefault();
-
-        // Return if message is empty
-        if (!message.value.length) return;
-
-        // Send message
-        send_message({
-            'message': message.value,
-            'contact': contact.value
-        });
-
-        // Clear message
-        message.value = '';
-    }
-}
-
-async function handle_send() {
-    textarea.value.focus();
-
-    // Return if message is empty
-    if (!message.value.length) return;
-
-    // Send message
-    send_message({
-        'message': message.value,
-        'contact': contact.value
-    });
-
-    // Clear message
-    message.value = '';
-}
-
-async function handle_input() {
-    // Check how many lines the textarea has
-    let lines = textarea.value.value.split('\n').length;
-
-    if (lines > 5) {
-        lines = 5;
-    }
-
-    textarea.value.rows = lines;
 }
 
 async function get_results() {
@@ -353,13 +180,6 @@ async function get_results() {
         return;
     }
     results.value = fuse.value.search(query.value).map(item => item.item);
-}
-
-async function requestPermission() {
-    if (Notification.permission === 'granted') return;
-    Notification.requestPermission().then((result) => {
-        window.location.href = window.location.origin + window.location.pathname;
-    });
 }
 
 async function add_code() {
@@ -429,18 +249,6 @@ async function remove_contact() {
     contact.value = null;
 }
 
-async function open_keyboard() {
-    if ("virtualKeyboard" in navigator) {
-        navigator.virtualKeyboard.show();
-        nextTick(() => {
-            messages.value.scroll({
-                top: messages.value.scrollHeight,
-                behavior: 'smooth'
-            })
-        })
-    }
-}
-
 async function logout() {
     console.log('Logging out...');
     // Clear localStorage
@@ -498,12 +306,8 @@ async function send_message(data) {
     // Add to chat
     conns.value[data.contact.secret].items.push(msg);
 
-    nextTick(() => {
-        messages.value.scroll({
-            top: messages.value.scrollHeight,
-            behavior: 'smooth'
-        })
-    })
+    // Scroll down
+    right_pane.value.scroll_messages();
 
     // 1: Use the already present connection and send the message
     if (conns.value[data.contact.secret].conn) {
@@ -605,13 +409,7 @@ async function open_chat(item) {
     const msgs = await tx.store.index('secret').getAll(item.secret);
     conns.value[item.secret].items = msgs;
 
-    nextTick(() => {
-        if (desktop.value) textarea.value.focus();
-        messages.value.scroll({
-            top: messages.value.scrollHeight,
-            behavior: 'auto'
-        })
-    })
+    right_pane.value.focus_chat();
 }
 
 async function stop_qr_scan() {
@@ -709,7 +507,8 @@ async function handle_incoming_connection(connection) {
             const found = contacts.value.filter(ct => ct.secret == data.secret).length;
             if (found) return;
 
-            qr_visible.value = false;
+            // Hide QR
+            _QR_show.value.hide();
             conns.value[data.secret] = {
                 conn: null,
                 items: [],
@@ -903,7 +702,7 @@ async function peer_setup() {
         handle_incoming_connection(connection);
     })
     peer.value.on('open', () => {
-        console.log('New Peer created:', peer.value.id);
+        console.log('Peer created:', peer.value.id);
     })
     peer.value.on('close', () => {
         console.log("Peer close event!");

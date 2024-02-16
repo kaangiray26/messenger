@@ -92,7 +92,6 @@ async function switch_camera() {
     // Get video devices
     const devices = await navigator.mediaDevices.enumerateDevices();
     const video_devices = devices.filter(device => device.kind === 'videoinput');
-    console.log(video_devices);
 
     // Get next device
     device_index.value = (device_index.value + 1) % video_devices.length;
