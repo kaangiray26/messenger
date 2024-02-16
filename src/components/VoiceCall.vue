@@ -43,13 +43,13 @@
             </div>
             <h1 class="fw-bold text-center text-light pt-3 mb-0">{{ name }}</h1>
             <span class="text-center text-light">{{ duration }}</span>
+            <audio ref="audio" class="voicecall-audio" autoplay></audio>
         </div>
         <div class="videocall-controls">
-            <div class="icon-btn">
-                <span class="material-symbols-outlined">mic_off</span>
-            </div>
-            <div class="icon-btn" @click="change_output">
-                <span class="material-symbols-outlined">volume_up</span>
+            <div class="icon-btn" @click="mute">
+                <span class="material-symbols-outlined">
+                    {{ muted ? 'mic_off' : 'mic' }}
+                </span>
             </div>
             <div class="call_end-btn" @click="end_call">
                 <span class="material-symbols-outlined">call_end</span>
@@ -66,7 +66,7 @@ const call = ref(null);
 
 // Audio
 const audio = ref(null);
-const device_index = ref(0);
+const muted = ref(false);
 const mediastream = ref(null);
 
 // Call duration
@@ -83,16 +83,9 @@ const props = defineProps({
     peer: Object
 })
 
-async function change_output() {
-    console.log("Change sound output device");
-
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioOutputDevices = devices.filter(device => device.kind === 'audiooutput');
-
-    // Change audio output device
-    device_index.value = (device_index.value + 1) % audioOutputDevices.length;
-    audio.value.setSinkId(audioOutputDevices[device_index.value].deviceId);
-    console.log("Audio output device changed to:", audioOutputDevices[device_index.value].label);
+async function mute() {
+    mediastream.value.getAudioTracks()[0].enabled = !mediastream.value.getAudioTracks()[0].enabled;
+    muted.value = !mediastream.value.getAudioTracks()[0].enabled;
 }
 
 async function end_call() {
@@ -105,6 +98,11 @@ async function close() {
     name.value = null;
     startTime.value = null;
 
+    muted.value = ref(false);
+
+    startTime.value = null;
+    duration.value = '00:00';
+
     calling.value = false;
     incoming.value = false;
     in_call.value = false;
@@ -115,6 +113,7 @@ async function close() {
     audio.value.srcObject = null;
 
     // Stop mediastream
+    if (!mediastream.value) return;
     mediastream.value.getTracks().forEach(track => track.stop());
     mediastream.value = null;
 }
@@ -122,9 +121,7 @@ async function close() {
 async function handle_incoming_call(incoming_call) {
     // Handlers
     incoming_call.on('stream', (remoteStream) => {
-        audio.value = new Audio();
         audio.value.srcObject = remoteStream;
-        audio.value.play();
     })
 
     incoming_call.on('close', async () => {
@@ -146,9 +143,7 @@ async function handle_outgoing_call(outgoing_call) {
     // Handlers
     outgoing_call.on('stream', (remoteStream) => {
         switch_to_in_call();
-        audio.value = new Audio();
         audio.value.srcObject = remoteStream;
-        audio.value.play();
     })
 
     outgoing_call.on('close', async () => {

@@ -77,7 +77,9 @@
                             arrow_back
                         </span>
                         <img src="/images/person.svg" class="avatar me-2">
-                        <span class="name">{{ contact.name }}</span>
+                        <div class="text-truncate">
+                            <span class="name">{{ contact.name }}</span>
+                        </div>
                         <div class="d-flex align-items-center ms-auto">
                             <div class="icon-btn me-2" @click="videocall_contact">
                                 <span class="material-symbols-outlined">video_call</span>

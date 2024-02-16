@@ -39,17 +39,21 @@
     <div v-show="in_call" class="overlay-fullscreen flex-column bg-black">
         <div class="videocall-container">
             <video ref="dst_video" class="videocall-dst" autoplay playsinline></video>
-            <video ref="src_video" class="videocall-src" autoplay playsinline></video>
+            <video ref="src_video" class="videocall-src" autoplay playsinline muted></video>
         </div>
         <div class="videocall-controls">
-            <div class="icon-btn">
+            <div class="icon-btn" @click="switch_camera">
                 <span class="material-symbols-outlined">flip_camera_ios</span>
             </div>
-            <div class="icon-btn">
-                <span class="material-symbols-outlined">videocam_off</span>
+            <div class="icon-btn" @click="toggle_camera">
+                <span class="material-symbols-outlined">
+                    {{ camera ? 'videocam_off' : 'videocam' }}
+                </span>
             </div>
-            <div class="icon-btn">
-                <span class="material-symbols-outlined">mic_off</span>
+            <div class="icon-btn" @click="mute">
+                <span class="material-symbols-outlined">
+                    {{ muted ? 'mic_off' : 'mic' }}
+                </span>
             </div>
             <div class="call_end-btn" @click="end_call">
                 <span class="material-symbols-outlined">call_end</span>
@@ -64,6 +68,11 @@ import { ref } from 'vue';
 const name = ref(null);
 const call = ref(null);
 
+// Video
+const muted = ref(false);
+const camera = ref(false);
+const mediastream = ref(null);
+
 const src_video = ref(null);
 const dst_video = ref(null);
 
@@ -76,6 +85,24 @@ const call_available = ref(false);
 const props = defineProps({
     peer: Object
 })
+
+async function switch_camera() {
+    console.log("Switching cameras...");
+    // Get video devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const video_devices = devices.filter(device => device.kind === 'videoinput');
+    console.log(video_devices);
+}
+
+async function toggle_camera() {
+    mediastream.value.getVideoTracks()[0].enabled = !mediastream.value.getVideoTracks()[0].enabled;
+    camera.value = !mediastream.value.getVideoTracks()[0].enabled;
+}
+
+async function mute() {
+    mediastream.value.getAudioTracks()[0].enabled = !mediastream.value.getAudioTracks()[0].enabled;
+    muted.value = !mediastream.value.getAudioTracks()[0].enabled;
+}
 
 async function end_call() {
     closer.value = true;
@@ -95,11 +122,9 @@ async function close() {
     dst_video.value.srcObject = null;
 
     // Stop mediastream
-    const stream = src_video.value.srcObject;
-    if (!stream) return;
-
-    stream.getTracks().forEach(track => track.stop());
-    src_video.value.srcObject = null;
+    if (!mediastream.value) return;
+    mediastream.value.getTracks().forEach(track => track.stop());
+    mediastream.value = null;
 }
 
 async function handle_incoming_call(incoming_call) {
@@ -156,12 +181,12 @@ async function accept_call() {
     switch_to_in_call();
 
     // Get mediastream
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    src_video.value.srcObject = mediaStream;
+    mediastream.value = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    src_video.value.srcObject = mediastream.value;
 
     // Answer call
     await handle_incoming_call(call.value)
-    call.value.answer(mediaStream);
+    call.value.answer(mediastream.value);
 }
 
 async function decline_call() {
@@ -181,11 +206,11 @@ async function make_call(contact_secret, contact_name) {
     calling.value = true;
 
     // Get mediastream
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    src_video.value.srcObject = mediaStream;
+    mediastream.value = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    src_video.value.srcObject = mediastream.value;
 
     // Set call
-    const outgoing_call = props.peer.call(contact_secret, mediaStream, {
+    const outgoing_call = props.peer.call(contact_secret, mediastream.value, {
         metadata: {
             'secret': props.peer.id,
             'type': 'videocall',
