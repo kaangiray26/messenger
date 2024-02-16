@@ -43,8 +43,6 @@
             </div>
             <h1 class="fw-bold text-center text-light pt-3 mb-0">{{ name }}</h1>
             <span class="text-center text-light">{{ duration }}</span>
-            <!-- <video ref="dst_video" class="videocall-dst" autoplay playsinline></video>
-            <video ref="src_video" class="videocall-src" autoplay playsinline></video> -->
         </div>
         <div class="videocall-controls">
             <div class="icon-btn">
@@ -69,6 +67,7 @@ const call = ref(null);
 // Audio
 const audio = ref(null);
 const device_index = ref(0);
+const mediastream = ref(null);
 
 // Call duration
 const startTime = ref(null);
@@ -111,21 +110,18 @@ async function close() {
     in_call.value = false;
     call_available.value = false;
 
-    // Stop remote mediastream
-    dst_video.value.srcObject = null;
+    // Stop audio stream
+    audio.value.pause();
+    audio.value.srcObject = null;
 
     // Stop mediastream
-    const stream = src_video.value.srcObject;
-    if (!stream) return;
-
-    stream.getTracks().forEach(track => track.stop());
-    src_video.value.srcObject = null;
+    mediastream.value.getTracks().forEach(track => track.stop());
+    mediastream.value = null;
 }
 
 async function handle_incoming_call(incoming_call) {
     // Handlers
     incoming_call.on('stream', (remoteStream) => {
-        // dst_video.value.srcObject = remoteStream;
         audio.value = new Audio();
         audio.value.srcObject = remoteStream;
         audio.value.play();
@@ -150,7 +146,6 @@ async function handle_outgoing_call(outgoing_call) {
     // Handlers
     outgoing_call.on('stream', (remoteStream) => {
         switch_to_in_call();
-        // dst_video.value.srcObject = remoteStream;
         audio.value = new Audio();
         audio.value.srcObject = remoteStream;
         audio.value.play();
@@ -175,16 +170,11 @@ async function accept_call() {
     switch_to_in_call();
 
     // Get mediastream
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-
-    // src_video.value.srcObject = mediaStream;
-    // audio.value = new Audio();
-    // audio.value.srcObject = mediaStream;
-    // audio.value.play();
+    mediastream.value = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
 
     // Answer call
     await handle_incoming_call(call.value)
-    call.value.answer(mediaStream);
+    call.value.answer(mediastream.value);
 }
 
 async function decline_call() {
@@ -222,15 +212,10 @@ async function make_call(contact_secret, contact_name) {
     calling.value = true;
 
     // Get mediastream audio only no video
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-
-    // src_video.value.srcObject = mediaStream;
-    // audio.value = new Audio();
-    // audio.value.srcObject = mediaStream;
-    // audio.value.play();
+    mediastream.value = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
 
     // Set call
-    const outgoing_call = props.peer.call(contact_secret, mediaStream, {
+    const outgoing_call = props.peer.call(contact_secret, mediastream.value, {
         metadata: {
             'secret': props.peer.id,
             'type': 'voicecall',
