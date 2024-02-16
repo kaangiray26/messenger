@@ -72,6 +72,8 @@ const call = ref(null);
 const muted = ref(false);
 const camera = ref(false);
 const mediastream = ref(null);
+const extrastream = ref(null);
+const device_index = ref(0);
 
 const src_video = ref(null);
 const dst_video = ref(null);
@@ -87,11 +89,41 @@ const props = defineProps({
 })
 
 async function switch_camera() {
-    console.log("Switching cameras...");
     // Get video devices
     const devices = await navigator.mediaDevices.enumerateDevices();
     const video_devices = devices.filter(device => device.kind === 'videoinput');
     console.log(video_devices);
+
+    // Get next device
+    device_index.value = (device_index.value + 1) % video_devices.length;
+    console.log("Switching camera to:", video_devices[device_index.value].label);
+
+    // Stop mediastream
+    mediastream.value.getTracks().forEach(track => {
+        if (track.kind === 'video') {
+            track.stop();
+        }
+    });
+
+    // Get mediastream
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+            deviceId: { exact: video_devices[device_index.value].deviceId }
+        }
+    });
+
+    // Set own mediastream
+    src_video.value.srcObject = stream;
+
+    // Replace tracks
+    const senders = call.value.peerConnection.getSenders();
+    for (const sender of senders) {
+        if (sender.track.kind === 'video') {
+            sender.replaceTrack(stream.getVideoTracks()[0]);
+        }
+    }
+
+    extrastream.value = stream;
 }
 
 async function toggle_camera() {
@@ -100,8 +132,8 @@ async function toggle_camera() {
 }
 
 async function mute() {
-    mediastream.value.getAudioTracks()[0].enabled = !mediastream.value.getAudioTracks()[0].enabled;
-    muted.value = !mediastream.value.getAudioTracks()[0].enabled;
+    muted.value = !muted.value;
+    mediastream.value.getAudioTracks()[0].enabled = !muted.value;
 }
 
 async function end_call() {
@@ -122,9 +154,16 @@ async function close() {
     dst_video.value.srcObject = null;
 
     // Stop mediastream
-    if (!mediastream.value) return;
-    mediastream.value.getTracks().forEach(track => track.stop());
-    mediastream.value = null;
+    if (mediastream.value) {
+        mediastream.value.getTracks().forEach(track => track.stop());
+        mediastream.value = null;
+    }
+
+    // Stop extra mediastream
+    if (extrastream.value) {
+        extrastream.value.getTracks().forEach(track => track.stop());
+        extrastream.value = null;
+    }
 }
 
 async function handle_incoming_call(incoming_call) {
@@ -185,7 +224,6 @@ async function accept_call() {
     src_video.value.srcObject = mediastream.value;
 
     // Answer call
-    await handle_incoming_call(call.value)
     call.value.answer(mediastream.value);
 }
 
