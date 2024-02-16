@@ -43,12 +43,15 @@
             </div>
             <h1 class="fw-bold text-center text-light pt-3 mb-0">{{ name }}</h1>
             <span class="text-center text-light">{{ duration }}</span>
-            <video ref="dst_video" class="videocall-dst" autoplay playsinline></video>
-            <video ref="src_video" class="videocall-src" autoplay playsinline></video>
+            <!-- <video ref="dst_video" class="videocall-dst" autoplay playsinline></video>
+            <video ref="src_video" class="videocall-src" autoplay playsinline></video> -->
         </div>
         <div class="videocall-controls">
             <div class="icon-btn">
                 <span class="material-symbols-outlined">mic_off</span>
+            </div>
+            <div class="icon-btn" @click="change_output">
+                <span class="material-symbols-outlined">volume_up</span>
             </div>
             <div class="call_end-btn" @click="end_call">
                 <span class="material-symbols-outlined">call_end</span>
@@ -63,8 +66,9 @@ import { ref } from 'vue';
 const name = ref(null);
 const call = ref(null);
 
-const src_video = ref(null);
-const dst_video = ref(null);
+// Audio
+const audio = ref(null);
+const device_index = ref(0);
 
 // Call duration
 const startTime = ref(null);
@@ -79,6 +83,18 @@ const call_available = ref(false);
 const props = defineProps({
     peer: Object
 })
+
+async function change_output() {
+    console.log("Change sound output device");
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioOutputDevices = devices.filter(device => device.kind === 'audiooutput');
+
+    // Change audio output device
+    device_index.value = (device_index.value + 1) % audioOutputDevices.length;
+    audio.value.setSinkId(audioOutputDevices[device_index.value].deviceId);
+    console.log("Audio output device changed to:", audioOutputDevices[device_index.value].label);
+}
 
 async function end_call() {
     closer.value = true;
@@ -109,7 +125,10 @@ async function close() {
 async function handle_incoming_call(incoming_call) {
     // Handlers
     incoming_call.on('stream', (remoteStream) => {
-        dst_video.value.srcObject = remoteStream;
+        // dst_video.value.srcObject = remoteStream;
+        audio.value = new Audio();
+        audio.value.srcObject = remoteStream;
+        audio.value.play();
     })
 
     incoming_call.on('close', async () => {
@@ -131,7 +150,10 @@ async function handle_outgoing_call(outgoing_call) {
     // Handlers
     outgoing_call.on('stream', (remoteStream) => {
         switch_to_in_call();
-        dst_video.value.srcObject = remoteStream;
+        // dst_video.value.srcObject = remoteStream;
+        audio.value = new Audio();
+        audio.value.srcObject = remoteStream;
+        audio.value.play();
     })
 
     outgoing_call.on('close', async () => {
@@ -154,7 +176,11 @@ async function accept_call() {
 
     // Get mediastream
     const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    src_video.value.srcObject = mediaStream;
+
+    // src_video.value.srcObject = mediaStream;
+    // audio.value = new Audio();
+    // audio.value.srcObject = mediaStream;
+    // audio.value.play();
 
     // Answer call
     await handle_incoming_call(call.value)
@@ -182,7 +208,6 @@ function switch_to_in_call() {
         const timeDifference = currentTime - startTime.value;
         duration.value = new Date(timeDifference).toLocaleTimeString('en-GB', { minute: 'numeric', second: 'numeric' });
     }, 1000);
-
 }
 
 async function make_call(contact_secret, contact_name) {
@@ -198,7 +223,11 @@ async function make_call(contact_secret, contact_name) {
 
     // Get mediastream audio only no video
     const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    src_video.value.srcObject = mediaStream;
+
+    // src_video.value.srcObject = mediaStream;
+    // audio.value = new Audio();
+    // audio.value.srcObject = mediaStream;
+    // audio.value.play();
 
     // Set call
     const outgoing_call = props.peer.call(contact_secret, mediaStream, {
