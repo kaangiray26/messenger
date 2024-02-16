@@ -73,6 +73,8 @@ const emit = defineEmits(['close', 'send_message', 'changing', 'clear_chat', 're
 const message = ref('');
 const textarea = ref(null);
 
+const file_input = ref(null);
+
 // messages
 const messages = ref(null);
 
@@ -81,6 +83,17 @@ const props = defineProps({
     conns: Object,
     desktop: Boolean
 })
+
+async function select_file() {
+    file_input.value.click();
+}
+
+async function handle_upload() {
+    emit('send_file', {
+        'file': file_input.value.files[0],
+        'contact': props.contact
+    });
+}
 
 async function open_keyboard() {
     if ("virtualKeyboard" in navigator) {

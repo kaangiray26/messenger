@@ -76,10 +76,12 @@ import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { generateKey, readKey, encrypt, decrypt, createMessage, readMessage } from 'openpgp';
 import { openDB, deleteDB } from 'idb';
+import { v4 as uuidv4 } from 'uuid';
 
 import QRCode from 'qrcode'
 import Fuse from 'fuse.js'
 import jsQR from "jsqr";
+import { right } from '@popperjs/core';
 
 // Secrets
 const name = ref(null);
@@ -576,12 +578,7 @@ async function handle_incoming_connection(connection) {
 
             // Scroll down
             if (isOpen) {
-                nextTick(() => {
-                    messages.value.scroll({
-                        top: messages.value.scrollHeight,
-                        behavior: 'smooth'
-                    })
-                })
+                right_pane.value.scroll_messages();
             }
         }
     });
@@ -651,12 +648,7 @@ async function handle_outgoing_connection(connection) {
 
             // Scroll down
             if (isOpen) {
-                nextTick(() => {
-                    messages.value.scroll({
-                        top: messages.value.scrollHeight,
-                        behavior: 'smooth'
-                    })
-                })
+                right_pane.value.scroll_messages();
             }
         }
     });

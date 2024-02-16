@@ -83,10 +83,17 @@ body {
     padding: 0.5rem 1rem !important;
 }
 
+.textarea-container {
+    display: flex;
+    align-items: end;
+    padding: 1rem 0.5rem;
+    margin-bottom: env(keyboard-inset-height);
+}
+
 textarea {
     resize: none;
     border: none !important;
-    background-color: white !important;
+    height: 100%;
     color: black !important;
     min-height: unset !important;
     padding: 0.5rem !important;
@@ -99,15 +106,25 @@ textarea:focus {
     box-shadow: none !important;
 }
 
-.selectable {
-    user-select: text !important;
+.file-send-btn {
+    background-color: white;
+    display: flex;
+    border-radius: 50%;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5rem;
+    margin-left: 0.5rem;
+    cursor: pointer;
+    aspect-ratio: 1/1 !important;
 }
 
-.textarea-container {
-    display: flex;
-    align-items: end;
-    padding: 1rem 0.5rem;
-    margin-bottom: env(keyboard-inset-height);
+.file-send-btn:hover,
+.file-send-btn:active {
+    background-color: #eceff4;
+}
+
+.selectable {
+    user-select: text !important;
 }
 
 .send-button {
@@ -278,7 +295,7 @@ canvas {
 }
 
 .name {
-    word-break: break-all;
+    word-break: break-word;
 }
 
 .time {
@@ -511,12 +528,17 @@ canvas {
     }
 
     .textarea-container {
-        padding: 0;
+        padding: 0.5rem;
+        background-color: white !important;
     }
 
     textarea {
-        padding: 1rem !important;
+        padding: 0.5rem !important;
         border-radius: 0 !important;
+    }
+
+    .file-send-btn {
+        margin-left: 0 !important;
     }
 
     .send-button {
