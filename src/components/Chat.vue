@@ -158,7 +158,7 @@ async function send_message(data) {
 async function handle_outgoing_connection(connection) {
     // Add message to list
     connection.on('data', async (data) => {
-        console.log('Outgoing data:', data);
+        console.log('Outgoing data:', data, connection.metadata);
         // Handle message
         if (data.type === 'message') {
             // Decrypt message
@@ -171,7 +171,7 @@ async function handle_outgoing_connection(connection) {
             const isOpen = store.contact && store.contact.secret == connection.metadata.to;
 
             if (!isOpen) {
-                store.connections[connection.metadata.to].notification = true;
+                store.connections[connection.metadata.to].notification += 1;
                 create_notification(connection.metadata.to, decrypted.data);
             }
 

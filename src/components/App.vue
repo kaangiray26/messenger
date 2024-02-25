@@ -45,8 +45,7 @@ const peerConfig = {
 }
 
 // firebase
-// const server = "https://home.buzl.uk";
-const server = "http://localhost:3000"
+const server = "https://home.buzl.uk";
 const firebaseConfig = {
     apiKey: "AIzaSyAh17S_KmK43c9U85OudQpti_JQ8hdYJn4",
     authDomain: "kaangiray26-messenger.firebaseapp.com",
@@ -82,7 +81,7 @@ async function voicecall_contact() {
 
 async function open_chat(item) {
     // Load contact
-    store.connections[item.secret].notification = false;
+    store.connections[item.secret].notification = 0;
     store.contact = item;
 
     // Load messages
@@ -171,7 +170,7 @@ async function handle_incoming_connection(connection) {
             const isOpen = store.contact && store.contact.secret == connection.metadata.from;
 
             if (!isOpen) {
-                store.connections[connection.metadata.from].notification = true;
+                store.connections[connection.metadata.from].notification += 1;
                 create_notification(connection.metadata.from, decrypted.data);
             }
 
@@ -243,15 +242,15 @@ async function peer_status_check(data) {
 async function peer_setup() {
     // Create peer
     store.peer = new Peer([secrets.secret], {
-        // host: 'home.buzl.uk',
-        // port: 443,
-        // secure: true,
-        host: 'localhost',
-        port: 3000,
+        host: 'home.buzl.uk',
+        port: 443,
+        secure: true,
+        // host: 'localhost',
+        // port: 3000,
+        // secure: false,
         path: '/',
         token: secrets.token,
         config: peerConfig,
-        secure: false,
     });
     store.peer.on('connection', (connection) => {
         console.log('New incoming connection created:', connection.metadata.from);

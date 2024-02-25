@@ -40,6 +40,8 @@ async function handle_message(payload) {
         decryptionKeys: privkey
     });
 
+    console.log("Decrypted:", decrypted);
+
     // Message object
     const time = new Date();
     const msg = {

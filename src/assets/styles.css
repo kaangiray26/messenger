@@ -236,7 +236,7 @@ canvas {
 .right-pane {
     top: 0;
     left: 0;
-    z-index: 1;
+    z-index: 0;
     height: 100%;
     background-color: #eceff4;
     display: none;
@@ -272,10 +272,13 @@ canvas {
 .notification {
     --notification-color: #bf616a;
     display: flex;
-    padding: 0.5rem;
+    justify-content: center;
+    align-items: center;
     border-radius: 50%;
-    border: 1px solid var(--notification-color);
     background-color: var(--notification-color);
+    width: 28px !important;
+    height: 28px !important;
+    color: white;
 }
 
 .avatar {
@@ -379,6 +382,7 @@ canvas {
     justify-content: center;
     align-items: center;
     z-index: 1;
+    padding: 1rem;
 }
 
 .overlay-fullscreen {

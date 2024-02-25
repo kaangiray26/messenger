@@ -61,8 +61,9 @@
                             <span class="name">{{ item.name }}</span>
                         </div>
                     </div>
-                    <div class="d-flex justify-content-end align-items-center">
-                        <span v-show="store.connections[item.secret].notification" class="notification"></span>
+                    <div class="d-flex justify-content-end align-items-start ms-1">
+                        <small v-show="store.connections[item.secret].notification" class="notification">{{
+                            store.connections[item.secret].notification }}</small>
                     </div>
                 </div>
             </div>
