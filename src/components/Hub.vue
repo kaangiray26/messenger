@@ -13,31 +13,31 @@
                     </span>
                     <ul class="dropdown-menu">
                         <li class="dropdown-li">
-                            <a class="dropdown-item" @click="emit('changing')">
+                            <a class="dropdown-item" @click="changename_modal.show">
                                 <span class="bi bi-pencil-fill pe-1"></span>
                                 Change name
                             </a>
                         </li>
                         <li class="dropdown-li">
-                            <a class="dropdown-item" @click="emit('show_qr')">
+                            <a class="dropdown-item" @click="qr_modal.show">
                                 <span class="bi bi-qr-code pe-1"></span>
                                 Show QR
                             </a>
                         </li>
                         <li class="dropdown-li">
-                            <a class="dropdown-item" @click="emit('scan_qr')">
+                            <a class="dropdown-item" @click="scan_modal.show">
                                 <span class="bi bi-qr-code-scan pe-1"></span>
                                 Scan QR
                             </a>
                         </li>
                         <li class="dropdown-li">
-                            <a class="dropdown-item" @click="emit('adding')">
+                            <a class="dropdown-item" @click="addcode_modal.show">
                                 <span class="bi bi-key-fill pe-1"></span>
                                 Add code
                             </a>
                         </li>
                         <li class="dropdown-li">
-                            <a class="dropdown-item" @click="emit('logging_out')">
+                            <a class="dropdown-item" @click="logout_modal.show">
                                 <span class="bi bi-door-open-fill pe-1"></span>
                                 Log out
                             </a>
@@ -46,7 +46,7 @@
                 </div>
             </div>
             <div class="d-flex px-3 mb-3">
-                <span class="fw-bold selectable">{{ name }}</span>
+                <span class="fw-bold selectable">{{ secrets.name }}</span>
             </div>
             <div class="input-group px-3 mb-2">
                 <span class="input-group-text bi bi-search" id="username-search"></span>
@@ -62,30 +62,45 @@
                         </div>
                     </div>
                     <div class="d-flex justify-content-end align-items-center">
-                        <span v-show="conns[item.secret].notification" class="notification"></span>
+                        <span v-show="store.connections[item.secret].notification" class="notification"></span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <LogoutModal ref="logout_modal" />
+    <AddCodeModal ref="addcode_modal" @update_results="update_results" />
+    <ChangeNameModal ref="changename_modal" @update_results="update_results" />
+    <ScanModal ref="scan_modal" />
+    <QRModal ref="qr_modal" />
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { store, secrets } from '/js/store.js';
+import Fuse from 'fuse.js'
+import LogoutModal from '/modals/LogoutModal.vue';
+import AddCodeModal from '../modals/AddCodeModal.vue';
+import ChangeNameModal from '../modals/ChangeNameModal.vue';
+import ScanModal from '../modals/ScanModal.vue';
+import QRModal from '../modals/QRModal.vue';
 
 // input
 const query = ref('');
+const results = ref([]);
+
+// fuzzy search
+const fuse = ref(null);
 
 // emits
-const emit = defineEmits(['open_chat', 'changing', 'show_qr', 'scan_qr', 'adding', 'logging_out']);
+const emit = defineEmits(['open_chat']);
 
-const props = defineProps({
-    name: String,
-    conns: Object,
-    contacts: Array,
-    results: Array,
-    get_results: Function,
-})
+// modals
+const logout_modal = ref(null);
+const addcode_modal = ref(null);
+const changename_modal = ref(null);
+const scan_modal = ref(null);
+const qr_modal = ref(null);
 
 async function open_chat(item) {
     emit('open_chat', item);
@@ -97,4 +112,34 @@ async function requestPermission() {
         window.location.href = window.location.origin + window.location.pathname;
     });
 }
+
+async function get_results() {
+    if (!query.value.length) {
+        results.value = store.contacts;
+        return;
+    }
+    results.value = fuse.value.search(query.value).map(item => item.item);
+}
+
+async function update_results() {
+    fuse.value.setCollection(store.contacts);
+    results.value = store.contacts;
+}
+
+async function hide_qr() {
+    qr_modal.value.hide();
+}
+
+defineExpose({
+    update_results,
+    hide_qr,
+})
+
+onMounted(() => {
+    // Create fuzzy search
+    fuse.value = new Fuse(store.contacts, {
+        keys: ['name', 'secret'],
+        threshold: 0.3,
+    })
+})
 </script>

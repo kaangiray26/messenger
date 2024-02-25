@@ -17,6 +17,6 @@ async function register() {
     }
 }
 
-register().then(() => {
-    createApp(App).mount('#app');
-})
+// register().then(() => {
+// })
+createApp(App).mount('#app');

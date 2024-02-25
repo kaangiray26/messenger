@@ -64,6 +64,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import { store, secrets } from '/js/store.js';
 
 const name = ref(null);
 const call = ref(null);
@@ -83,10 +84,6 @@ const incoming = ref(false);
 const in_call = ref(false);
 const closer = ref(false);
 const call_available = ref(false);
-
-const props = defineProps({
-    peer: Object
-})
 
 async function switch_camera() {
     // Get video devices
@@ -247,9 +244,9 @@ async function make_call(contact_secret, contact_name) {
     src_video.value.srcObject = mediastream.value;
 
     // Set call
-    const outgoing_call = props.peer.call(contact_secret, mediastream.value, {
+    const outgoing_call = store.peer.call(contact_secret, mediastream.value, {
         metadata: {
-            'secret': props.peer.id,
+            'secret': secrets.secret,
             'type': 'videocall',
         }
     });
