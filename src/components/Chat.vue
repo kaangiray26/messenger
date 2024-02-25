@@ -78,6 +78,7 @@
 import { ref, nextTick, onBeforeMount } from 'vue';
 import { store, secrets } from '/js/store.js';
 import { readKey, encrypt, decrypt, createMessage, readMessage } from 'openpgp';
+import { Dropdown } from 'bootstrap';
 import ChangeNameModal from '../modals/ChangeNameModal.vue';
 
 const emit = defineEmits(['videocall', 'voicecall']);

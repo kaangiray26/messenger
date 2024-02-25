@@ -79,6 +79,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { store, secrets } from '/js/store.js';
+import { Dropdown } from 'bootstrap';
 import Fuse from 'fuse.js'
 import LogoutModal from '/modals/LogoutModal.vue';
 import AddCodeModal from '../modals/AddCodeModal.vue';

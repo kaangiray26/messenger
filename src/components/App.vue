@@ -17,7 +17,6 @@ import VoiceCall from './VoiceCall.vue';
 import VideoCall from './VideoCall.vue';
 
 import { Peer } from 'peerjs';
-import { Dropdown } from 'bootstrap';
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { generateKey, readKey, decrypt, readMessage } from 'openpgp';
