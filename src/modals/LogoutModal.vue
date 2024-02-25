@@ -31,6 +31,14 @@ async function logout() {
     await store.db.close();
     await deleteDB('messenger');
 
+    // Unregister service worker
+    if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+            await registration.unregister();
+        }
+    }
+
     // Reload page
     window.location.href = window.location.origin + window.location.pathname;
 }

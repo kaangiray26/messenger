@@ -236,7 +236,7 @@ canvas {
 .right-pane {
     top: 0;
     left: 0;
-    z-index: 0;
+    z-index: 1;
     height: 100%;
     background-color: #eceff4;
     display: none;
@@ -381,8 +381,8 @@ canvas {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1;
     padding: 1rem;
+    z-index: 1;
 }
 
 .overlay-fullscreen {
@@ -482,6 +482,12 @@ canvas {
     border: 1px solid #ccc !important;
 }
 
+.file-send {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 /** Nord colors **/
 .nord-text-11 {
     color: #bf616a;
@@ -533,6 +539,7 @@ canvas {
         width: 75%;
         position: relative;
         padding: 0;
+        z-index: 0 !important;
     }
 
     .pane-cover {
@@ -553,8 +560,8 @@ canvas {
         border-radius: 0 !important;
     }
 
-    .file-send-btn {
-        margin-left: 0 !important;
+    .file-send {
+        height: 100% !important;
     }
 
     .send-button {

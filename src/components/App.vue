@@ -172,6 +172,8 @@ async function handle_incoming_connection(connection) {
             if (!isOpen) {
                 store.connections[connection.metadata.from].notification += 1;
                 create_notification(connection.metadata.from, decrypted.data);
+            } else if (!store.focus) {
+                create_notification(connection.metadata.from, decrypted.data);
             }
 
             // Message object
@@ -197,6 +199,12 @@ async function handle_incoming_connection(connection) {
             if (isOpen) {
                 chat.value.scroll_messages();
             }
+            return
+        }
+
+        // Handle file
+        if (data.type === 'file') {
+
         }
     });
 
@@ -242,12 +250,12 @@ async function peer_status_check(data) {
 async function peer_setup() {
     // Create peer
     store.peer = new Peer([secrets.secret], {
-        host: 'home.buzl.uk',
-        port: 443,
-        secure: true,
         // host: 'localhost',
         // port: 3000,
         // secure: false,
+        host: 'home.buzl.uk',
+        port: 443,
+        secure: true,
         path: '/',
         token: secrets.token,
         config: peerConfig,
@@ -367,8 +375,17 @@ async function firebase_setup() {
     // console.log("Firebase setup...");
     const app = initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
-
     onMessage(messaging, handle_message);
+
+    // Check if service worker is available
+    if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        if (!registration) {
+            console.error('Service Worker registration failed:', err);
+            return
+        }
+        console.info('Service Worker registered with scope:', registration.scope);
+    }
 
     // Push notification registration
     if (localStorage.getItem('push')) return;
@@ -442,6 +459,15 @@ async function create_keys() {
 }
 
 onBeforeMount(async () => {
+    // Handle visibility changes
+    document.onvisibilitychange = () => {
+        if (document.visibilityState === 'hidden') {
+            store.focus = false;
+            return
+        }
+        store.focus = true;
+    };
+
     // Configure the virtual keyboard
     if ("virtualKeyboard" in navigator) {
         navigator.virtualKeyboard.overlaysContent = true;

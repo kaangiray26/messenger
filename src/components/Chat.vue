@@ -55,6 +55,13 @@
             <div class="textarea-container">
                 <textarea ref="textarea" v-model="message" class="form-control" placeholder="Message" rows="1"
                     @keypress="handle_keys" @input="handle_input" @focus="open_keyboard"></textarea>
+                <!-- File send -->
+                <!-- <div class="file-send">
+                    <input ref="file_input" type="file" class="d-none" @change="handle_file">
+                    <span class="material-symbols-outlined clickable" @click="file_input.click">
+                        attach_file
+                    </span>
+                </div> -->
                 <div class="send-button" @click="handle_send">
                     <span class="material-symbols-outlined">
                         send
@@ -75,6 +82,9 @@ import ChangeNameModal from '../modals/ChangeNameModal.vue';
 
 const emit = defineEmits(['videocall', 'voicecall']);
 
+// chunk size
+const chunk_size = 1024 * 512;
+
 // textarea
 const message = ref('');
 const textarea = ref(null);
@@ -89,6 +99,58 @@ const desktop = ref(false);
 
 // modals
 const changename_modal = ref(null);
+
+async function send_packet(contact, packet) {
+    // 1: Use the already present connection and send the message
+    if (store.connections[contact.secret].conn) {
+        const connection = store.connections[contact.secret];
+        connection.metadata = {
+            from: secrets.secret,
+            to: contact.secret,
+        }
+        connection.conn.send(packet);
+        return
+    }
+
+    // 2: Try to create a new connection and send the message
+    const connection = store.peer.connect(contact.secret, {
+        reliable: true,
+        metadata: {
+            from: secrets.secret,
+            to: contact.secret,
+        },
+    })
+    connection.on('open', async () => {
+        handle_outgoing_connection(connection);
+        connection.send(packet);
+        return
+    })
+}
+
+async function send_file(data) {
+    // Get file details
+    const details = {
+        'name': data.file.name,
+        'type': data.file.type,
+        'chunks': Math.ceil(data.file.size / chunk_size),
+    }
+
+    // Encrypt details
+    const encrypted = await encrypt({
+        message: await createMessage({ text: JSON.stringify(details) }),
+        encryptionKeys: await readKey({ armoredKey: data.contact.pubkey }),
+    });
+
+    // Create a secret for the chunks
+    const id = crypto.getRandomValues(new Uint8Array(16)).reduce((p, i) => p + (i % 16).toString(16), '');
+    const packet = {
+        type: 'file',
+        file_id: id,
+        details: encrypted
+    }
+    send_packet(data.contact, packet);
+    return
+}
 
 async function send_message(data) {
     console.log("Message to send:", data);
@@ -173,6 +235,8 @@ async function handle_outgoing_connection(connection) {
             if (!isOpen) {
                 store.connections[connection.metadata.to].notification += 1;
                 create_notification(connection.metadata.to, decrypted.data);
+            } else if (!store.focus) {
+                create_notification(connection.metadata.from, decrypted.data);
             }
 
             // Message object
@@ -256,6 +320,16 @@ async function handle_keys(event) {
         // Clear message
         message.value = '';
     }
+}
+
+async function handle_file() {
+    const file = file_input.value.files[0];
+
+    // Send file
+    send_file({
+        'file': file,
+        'contact': store.contact
+    });
 }
 
 async function handle_send() {

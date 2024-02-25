@@ -5,6 +5,8 @@ import { reactive } from "vue";
 const store = reactive({
     db: null,
     peer: null,
+    chunks: [],
+    focus: true,
     contact: null,
     contacts: [],
     connections: {},

@@ -83,7 +83,7 @@ function tick() {
             drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
 
             add_contact(code.data);
-            stop_qr_scan();
+            reset();
         }
     }
     requestAnimationFrame(tick);
