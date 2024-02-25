@@ -35,7 +35,7 @@ async function change_name() {
     if (!store.contact) {
         secrets.name = name_input.value;
         await store.db.put('keys', secrets.name, 'name');
-        changing.value = false;
+        visible.value = false;
         return
     }
 
