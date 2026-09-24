@@ -1,4 +1,4 @@
-#!/usr/bin/zsh
+#!/bin/bash
 set -e
 rm -rf src/dist
 npm run build
